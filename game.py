@@ -7,6 +7,7 @@ import random
 from champions import get_available_champions, Champion
 from shop import ShopManager
 from battle import BattleManager
+from carousel import CarouselManager
 
 # Importa TUTTE le costanti e le utility da config.py
 from config import (
@@ -67,11 +68,16 @@ class Game:
         self.augment_btn_rects = []
         self.augment_reroll_rect = None
         
+        # --- Sistema Carosello Condiviso (Shared Draft) ---
+        self.carousel_manager = None
+        self.carousel_rounds = [1, 4, 7]
+        self.carousel_selection_triggered_rounds = set()
+        
         self.board_slots = 14 # 7 colonne x 2 righe
         self.bench_slots = 9 
         self.board = [None] * self.board_slots 
         self.bench = [None] * self.bench_slots
-        self.player_items = [get_random_component_key(), get_random_component_key()]
+        self.player_items = []
         self.round_number = 1
         
         # Manager di gioco
@@ -86,6 +92,8 @@ class Game:
         # Variabile per tenere traccia del vincitore dell'ultima battaglia
         self.last_battle_winner = None
         self.last_round_stats = {}
+        self.play_button_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 10, 240, 64)
+        self.continue_button_rect = pygame.Rect(WIDTH // 2 - 140, HEIGHT // 2 + 135, 280, 52)
         self.audio.play_music("shop_theme")
 
     def run(self):
@@ -109,6 +117,8 @@ class Game:
                     
                 if self.game_state == "MAIN_MENU":
                     self.handle_menu_events(event)
+                elif self.game_state == "CAROUSEL" and self.carousel_manager:
+                    self.carousel_manager.handle_event(event)
                 elif self.game_state == "AUGMENT_SELECTION":
                     self.handle_augment_events(event)
                 elif self.game_state == "SHOP":
@@ -119,7 +129,9 @@ class Game:
                     self.handle_result_events(event)
 
             # 2. Aggiorna Logica
-            if self.game_state == "BATTLE" and self.battle_manager:
+            if self.game_state == "CAROUSEL" and self.carousel_manager:
+                self.carousel_manager.update()
+            elif self.game_state == "BATTLE" and self.battle_manager:
                 self.battle_manager.update()
                 if self.battle_manager.is_over:
                     self.end_battle(self.battle_manager.winner)
@@ -130,6 +142,9 @@ class Game:
             if self.game_state == "MAIN_MENU":
                 self.audio.play_music("shop_theme")
                 self.draw_main_menu()
+            elif self.game_state == "CAROUSEL" and self.carousel_manager:
+                self.audio.play_music("shop_theme")
+                self.carousel_manager.draw(self.screen)
             elif self.game_state == "AUGMENT_SELECTION":
                 self.audio.play_music("shop_theme")
                 self.draw_augment_selection()
@@ -204,7 +219,6 @@ class Game:
         if event.type == pygame.MOUSEBUTTONDOWN:
             # Assicurati che play_button_rect esista
             if hasattr(self, 'play_button_rect') and self.play_button_rect.collidepoint(event.pos):
-                self.game_state = "SHOP"
                 # Resettiamo i dati del giocatore per una nuova partita
                 self.player_gold = 20
                 self.player_hp = 100
@@ -214,13 +228,15 @@ class Game:
                 self.losestreak = 0
                 self.board = [None] * self.board_slots
                 self.bench = [None] * self.bench_slots
-                self.player_items = [get_random_component_key(), get_random_component_key()]
+                self.player_items = []
                 self.player_augments = []
                 self.can_reroll_augments = True
                 self.augment_selection_triggered_rounds = set()
+                self.carousel_selection_triggered_rounds = set()
                 self.last_battle_player_team = []
                 self.shop_manager.reset() # Ricarica lo shop
                 self.round_number = 1   
+                self.trigger_carousel()
 
     def buy_xp(self):
         if self.player_gold >= 4 and self.player_level < 9:
@@ -443,11 +459,22 @@ class Game:
                 self.__init__()
                 self.game_state = "MAIN_MENU"
             else:
-                # Controlla se il nuovo round richiede la selezione di un Augment
-                if self.round_number in self.augment_rounds and self.round_number not in self.augment_selection_triggered_rounds:
+                # 1. Controlla se il nuovo round richiede la selezione di un Carosello (es. Round 4, 7)
+                if self.round_number in self.carousel_rounds and self.round_number not in self.carousel_selection_triggered_rounds:
+                    self.trigger_carousel()
+                # 2. Controlla se il nuovo round richiede la selezione di un Augment (es. Round 2, 5, 8)
+                elif self.round_number in self.augment_rounds and self.round_number not in self.augment_selection_triggered_rounds:
                     self.trigger_augment_selection()
                 else:
                     self.game_state = "SHOP"
+
+    # --- Gestione Stato: CAROUSEL ---
+    def trigger_carousel(self):
+        from carousel import CarouselManager
+        self.carousel_selection_triggered_rounds.add(self.round_number)
+        self.carousel_manager = CarouselManager(self, round_number=self.round_number)
+        self.game_state = "CAROUSEL"
+        print(f"🎠 FASE CAROSELLO CONDIVISO ROUND {self.round_number}: Seleziona il tuo campione!")
 
     # --- Gestione Stato: AUGMENT_SELECTION ---
     def trigger_augment_selection(self):
