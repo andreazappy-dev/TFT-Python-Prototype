@@ -164,3 +164,4 @@ def draw_glass_panel(surface, rect, border_radius=14, bg_color=(18, 22, 32, 215)
     if border_width > 0 and border_color:
         pygame.draw.rect(panel, border_color, (0, 0, rect.width, rect.height), width=border_width, border_radius=border_radius)
     surface.blit(panel, (rect.x, rect.y))
+

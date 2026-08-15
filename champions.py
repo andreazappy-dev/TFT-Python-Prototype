@@ -173,6 +173,9 @@ class Champion:
     def is_alive(self):
         return self.hp > 0
 
+    def take_damage(self, dmg):
+        self.hp = max(0, self.hp - dmg)
+
     def get_distance(self, other_champ):
         """ Calcola la distanza (euclidea) da un altro campione """
         return math.sqrt((self.x - other_champ.x)**2 + (self.y - other_champ.y)**2)

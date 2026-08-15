@@ -5,14 +5,14 @@ A standalone, fully modular 2D Auto-Battler engine written in Python and Pygame,
 ---
 
 <p align="center">
-  <img src="assets/screenshots/shop.png" width="48%" alt="Shop and Preparation Phase" />
+  <img src="shop.png" width="48%" alt="Shop and Preparation Phase" />
   &nbsp;
-  <img src="assets/screenshots/battle.png" width="48%" alt="Real-Time Combat and Damage Meter" />
+  <img src="battle.png" width="48%" alt="Real-Time Combat and Damage Meter" />
 </p>
 <p align="center">
-  <img src="assets/screenshots/augments.png" width="48%" alt="Hextech Augment Selection" />
+  <img src="augments.png" width="48%" alt="Hextech Augment Selection" />
   &nbsp;
-  <img src="assets/screenshots/menu.png" width="48%" alt="Main Menu" />
+  <img src="menu.png" width="48%" alt="Main Menu" />
 </p>
 
 ---
@@ -90,7 +90,7 @@ The engine is decoupled into specialized subsystems communicating through a cent
 ### Setup
 ```bash
 # Clone the repository
-git clone https://github.com/andreazappy-dev/TFT-Python-Prototype.git
+git clone https://github.com/andreazapp-dev/TFT-Python-Prototype.git
 cd TFT-Python-Prototype
 
 # Install dependencies

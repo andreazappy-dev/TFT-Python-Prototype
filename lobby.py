@@ -277,7 +277,7 @@ class LobbyManager:
             card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
             
             # Sfondo card
-            if p["is_human"]:\
+            if p["is_human"]:
                 bg_col = (18, 38, 55, 240) if is_hover else (12, 28, 42, 220)
                 border_col = (60, 200, 255, 220)
                 border_w = 2

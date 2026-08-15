@@ -252,3 +252,4 @@ def draw_traits_sidebar(surface, traits_list, start_x=15, start_y=130):
         draw_text(status_text, sub_font, status_color, surface, start_x + 48, current_y + 27, center=False)
 
         current_y += badge_h + spacing
+

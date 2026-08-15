@@ -22,7 +22,7 @@ class DamageMeter:
         """Gestisce il cambio di scheda o il toggle con click o tasto TAB"""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_TAB:
-                self.toggle_visibility()\
+                self.toggle_visibility()
                 return True
                 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -57,7 +57,7 @@ class DamageMeter:
         pygame.draw.rect(surface, btn_bg, self.toggle_btn_rect, border_radius=13)
         pygame.draw.rect(surface, GOLD if self.is_visible else (120, 130, 150), self.toggle_btn_rect, width=1, border_radius=13)
         
-        toggle_label = "DANNI [TAB]" if self.is_visible else "MOSTRA [TAB]"
+        toggle_label = "📊 DANNI [TAB]" if self.is_visible else "📊 MOSTRA [TAB]"
         draw_text(toggle_label, pygame.font.SysFont("Arial", 10, bold=True), GOLD if self.is_visible else (190, 200, 220), surface, self.toggle_btn_rect.centerx, self.toggle_btn_rect.centery)
         
         if not self.is_visible:
@@ -145,7 +145,8 @@ class DamageMeter:
 
             dps_val = int(val / max(0.5, elapsed_seconds))
             stat_num_text = f"{val} ({dps_val} DPS)" if dps_val > 0 else f"{val}"
-            draw_text(stat_num_text, pygame.font.SysFont("Arial", 9, bold=True), (210, 220, 240), surface, px + panel_w - 65, row_y + 5, center=False)
+            draw_text(stat_num_text, pygame.font.SysFont("Arial", 9, bold=True), (210, 220, 240), surface, px + panel_w - 10, row_y + 5, center=False)
+            # Re-allinea a destra
             
             # Barra Orizzontale Proporzionale
             bar_x = px + 42
