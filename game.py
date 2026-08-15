@@ -175,7 +175,7 @@ class Game:
         
         sub_font = pygame.font.SysFont("Arial", 16, bold=True)
         draw_text("TACTICAL AUTO-BATTLER • PROTOTYPE", sub_font, (170, 200, 240), self.screen, WIDTH // 2, HEIGHT // 2 - 65)
-        draw_text("by andreazapp-dev", TEXT_FONT, (140, 150, 170), self.screen, WIDTH // 2, HEIGHT // 2 - 35)
+        draw_text("by andreazappy-dev", TEXT_FONT, (140, 150, 170), self.screen, WIDTH // 2, HEIGHT // 2 - 35)
 
         # 4. Bottone GIOCA Curvo & Luminoso
         self.play_button_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 10, 240, 64)

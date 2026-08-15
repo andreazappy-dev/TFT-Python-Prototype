@@ -90,7 +90,7 @@ The engine is decoupled into specialized subsystems communicating through a cent
 ### Setup
 ```bash
 # Clone the repository
-git clone https://github.com/andreazapp-dev/TFT-Python-Prototype.git
+git clone https://github.com/andreazappy-dev/TFT-Python-Prototype.git
 cd TFT-Python-Prototype
 
 # Install dependencies
