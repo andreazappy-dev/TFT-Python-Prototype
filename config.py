@@ -18,18 +18,14 @@ GREEN = (60, 200, 100)
 RED = (200, 60, 60)
 GOLD = (230, 180, 30)
 
-# --- Font ---
-# (Questi ora vengono caricati qui una sola volta)
-try:
-    TITLE_FONT = pygame.font.Font(None, 80)
-    BUTTON_FONT = pygame.font.Font(None, 50)
-    TEXT_FONT = pygame.font.Font(None, 30)
-except Exception as e:
-    print(f"Errore caricamento font: {e}")
-    # Fallback in caso di errore
-    TITLE_FONT = pygame.font.SysFont("Arial", 80)
-    BUTTON_FONT = pygame.font.SysFont("Arial", 50)
-    TEXT_FONT = pygame.font.SysFont("Arial", 30)
+# --- Font Ottimizzati ---
+TITLE_FONT = pygame.font.SysFont("Arial", 46, bold=True)
+SUBTITLE_FONT = pygame.font.SysFont("Arial", 24, bold=True)
+HEADER_FONT = pygame.font.SysFont("Arial", 17, bold=True)
+BUTTON_FONT = pygame.font.SysFont("Arial", 16, bold=True)
+TEXT_FONT = pygame.font.SysFont("Arial", 14, bold=True)
+SMALL_FONT = pygame.font.SysFont("Arial", 12, bold=True)
+MICRO_FONT = pygame.font.SysFont("Arial", 10, bold=True)
 
 
 # --- Funzione Utile (Utility) ---
