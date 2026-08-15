@@ -1,7 +1,10 @@
-# shop.py
 import pygame
 import random
 from champions import Champion, get_available_champions
+from traits import calculate_team_traits, draw_traits_sidebar
+from items import get_item_data
+from asset_loader import get_background_image, draw_glass_panel
+from augments import draw_hud_augments
 
 # Importo da config.py
 from config import (
@@ -17,19 +20,20 @@ class ShopManager:
     def __init__(self, game, champions_database):
         self.game = game  # Riferimento alla classe Game principale
         self.shop_size = 5
-        self.card_size = (150, 150)
-        self.spacing_x = 200
-        self.margin_y = 180
+        self.card_size = (165, 205)
+        self.spacing_x = 205
+        self.margin_y = 86
         
         self.champions_pool = champions_database
         self.shop_champs = [] # I 5 campioni in vendita
         
         # Riferimenti ai bottoni per i click
-        # Usiamo 'game.screen' per ottenere WIDTH e HEIGHT
         screen_width = self.game.screen.get_width()
         screen_height = self.game.screen.get_height()
-        self.refresh_button_rect = pygame.Rect(screen_width//2 - 200, screen_height - 90, 180, 60)
-        self.confirm_button_rect = pygame.Rect(screen_width//2 + 20, screen_height - 90, 180, 60)
+        self.buy_xp_button_rect = pygame.Rect(screen_width//2 - 350, screen_height - 68, 210, 48)
+        self.refresh_button_rect = pygame.Rect(screen_width//2 - 120, screen_height - 68, 180, 48)
+        self.confirm_button_rect = pygame.Rect(screen_width//2 + 80, screen_height - 68, 220, 48)
+        
         self.buy_buttons = []
 
         # --- Aggiunte per Drag & Drop ---
@@ -37,6 +41,12 @@ class ShopManager:
         self.dragged_champ = None
         self.dragged_from_list = None # 'board' o 'bench'
         self.dragged_from_index = -1
+        
+        # --- Drag & Drop Oggetti ---
+        self.is_dragging_item = False
+        self.dragged_item_idx = -1
+        self.dragged_item_key = None
+        
         self.scroll_y = 0
 
         self.roll_shop(is_free=True)
@@ -45,42 +55,82 @@ class ShopManager:
         self.roll_shop(is_free=True)
 
     def roll_shop(self, is_free=False):
+        player_augments = getattr(self.game, 'player_augments', [])
+        is_golden_ticket_free = False
+        
         if not is_free:
-            if self.game.player_gold >= 2:
+            if "golden_ticket" in player_augments and random.random() < 0.45:
+                is_golden_ticket_free = True
+                print("🎟️ BIGLIETTO DORATO! Questo Reroll è Gratuito!")
+                if hasattr(self.game, 'audio'):
+                    self.game.audio.play_sfx("coin_buy")
+            elif self.game.player_gold >= 2:
                 self.game.player_gold -= 2
             else:
                 print("Oro non sufficiente per il Reroll!")
                 return
                 
-        self.shop_champs = [random.choice(self.champions_pool) for _ in range(self.shop_size)]
+        # Tabella probabilità: {livello: [C1, C2, C3, C4, C5]}
+        shop_odds = {
+            1: [1.00, 0.00, 0.00, 0.00, 0.00],
+            2: [1.00, 0.00, 0.00, 0.00, 0.00],
+            3: [0.75, 0.25, 0.00, 0.00, 0.00],
+            4: [0.55, 0.30, 0.15, 0.00, 0.00],
+            5: [0.45, 0.33, 0.20, 0.02, 0.00],
+            6: [0.30, 0.40, 0.25, 0.05, 0.00],
+            7: [0.19, 0.30, 0.35, 0.15, 0.01],
+            8: [0.18, 0.25, 0.32, 0.22, 0.03],
+            9: [0.10, 0.20, 0.25, 0.35, 0.10],
+        }
         
-        # for champ in self.shop_champs:
-            # Carichiamo le immagini
-            # if champ and champ.image_path:
-            #     try:
-            #         img = pygame.image.load(champ.image_path).convert_alpha()
-            #         champ.image = pygame.transform.scale(img, self.card_size)
-            #     except Exception as e:
-            #         print(f"Errore img shop: {e}")
-            #         champ.image = None
+        level = min(9, max(1, self.game.player_level))
+        odds = shop_odds[level]
+        
+        self.shop_champs = []
+        for _ in range(self.shop_size):
+            r = random.random()
+            cumulative = 0
+            target_cost = 1
+            for cost, prob in enumerate(odds, start=1):
+                cumulative += prob
+                if r <= cumulative:
+                    target_cost = cost
+                    break
+            
+            pool = [c for c in self.champions_pool if c.cost == target_cost]
+            if not pool: 
+                pool = self.champions_pool 
+            self.shop_champs.append(random.choice(pool))
+            
+        if not is_free and hasattr(self.game, 'audio'):
+            self.game.audio.play_sfx("reroll")
         print("Shop ricaricato.")
 
     # --- Acquisto Campione ---
     def buy_champion(self, champ_to_buy, shop_slot_index):
-        # Controlla se la panchina è piena
-        if len(self.game.bench) >= self.game.bench_slots:
+        # Cerca il primo slot libero nella panchina
+        free_slot = -1
+        for i in range(self.game.bench_slots):
+            if self.game.bench[i] is None:
+                free_slot = i
+                break
+                
+        if free_slot == -1:
             print("Panchina piena!")
-            return # Non comprare se non c'è spazio
+            return 
 
-        if self.game.player_gold >= 3:
-            self.game.player_gold -= 3
+        cost = self.shop_champs[shop_slot_index].cost
+        if self.game.player_gold >= cost:
+            self.game.player_gold -= cost
             
             bought_champ = self.shop_champs[shop_slot_index]
             self.shop_champs[shop_slot_index] = None # Slot vuoto
             
             # Aggiungi il campione alla panchina
-            self.game.bench.append(bought_champ)
-            print(f"Comprato: {bought_champ.name}. Aggiunto alla panchina.")
+            self.game.bench[free_slot] = bought_champ
+            if hasattr(self.game, 'audio'):
+                self.game.audio.play_sfx("coin_buy")
+            print(f"Comprato: {bought_champ.name} per {cost}g. Aggiunto alla panchina nello slot {free_slot}.")
             
             # Controlla i merge dopo ogni acquisto
             self.merge_champions(bought_champ)
@@ -89,339 +139,632 @@ class ShopManager:
 
     # --- Controllo Merge ---
     def merge_champions(self, champ_just_added):
-        """
-        Controlla i merge per il campione appena aggiunto.
-        Scansiona sia board che bench.
-        """
         if not champ_just_added:
             return False
 
         name_to_check = champ_just_added.name
         level_to_check = getattr(champ_just_added, 'level', 1)
+        if level_to_check >= 3:
+            return False # Già a 3 stelle
         
-        # 1. Trova tutte le copie (in entrambe le liste)
-        copies_in_board = [c for c in self.game.board if c and c.name == name_to_check and getattr(c, 'level', 1) == level_to_check]
-        copies_in_bench = [c for c in self.game.bench if c and c.name == name_to_check and getattr(c, 'level', 1) == level_to_check]
-        all_copies = copies_in_board + copies_in_bench
+        # 1. Trova tutte le copie (in entrambe le liste) e i loro indici
+        board_copies = [(i, c, 'board') for i, c in enumerate(self.game.board) if c and c.name == name_to_check and getattr(c, 'level', 1) == level_to_check]
+        bench_copies = [(i, c, 'bench') for i, c in enumerate(self.game.bench) if c and c.name == name_to_check and getattr(c, 'level', 1) == level_to_check]
+        
+        all_copies = board_copies + bench_copies
         
         if len(all_copies) < 3:
             return False # Non c'è un merge
 
-        print(f"MERGE DI {name_to_check} Lvl {level_to_check}!")
-        base_champ = all_copies[0]
+        print(f"🌟 MERGE DI {name_to_check} Lvl {level_to_check} -> Lvl {level_to_check + 1}!")
+        copies_to_merge = all_copies[:3]
+        base_champ = copies_to_merge[0][1]
         
-        # 2. Rimuovi le 3 copie (da qualsiasi lista provengano)
-        count = 0
-        for champ_to_remove in all_copies[:3]:
-            if champ_to_remove in self.game.board:
-                self.game.board.remove(champ_to_remove)
-            elif champ_to_remove in self.game.bench:
-                self.game.bench.remove(champ_to_remove)
-            count += 1
+        # Raccogli tutti gli oggetti e identifica se c'era una copia sulla scacchiera
+        collected_items = []
+        preferred_board_slot = None
+        
+        for idx, c, location in copies_to_merge:
+            c_items = list(getattr(c, 'items', []))
+            collected_items.extend(c_items)
+            if location == 'board' and preferred_board_slot is None:
+                preferred_board_slot = idx
+                
+        # 2. Rimuovi le 3 copie da board o bench
+        for idx, c, location in copies_to_merge:
+            if location == 'board' and self.game.board[idx] == c:
+                self.game.board[idx] = None
+            elif location == 'bench' and self.game.bench[idx] == c:
+                self.game.bench[idx] = None
             
         # 3. Crea il campione potenziato
         new_level = level_to_check + 1
-        multiplier = 1.6 if new_level == 2 else 2.5 # Lvl 2 o Lvl 3+
+        multiplier = 1.8 if new_level == 2 else 3.2 
         
         upgraded = Champion(
             base_champ.name, 
-            int(base_champ.hp * multiplier), 
+            int(base_champ.base_hp * multiplier), 
             int(base_champ.base_attack * multiplier), 
-            # base_champ.image_path,
-            int(getattr(base_champ, 'defense', 0) * multiplier),
+            int(getattr(base_champ, 'base_defense', 0) * multiplier),
             getattr(base_champ, 'crit_chance', 0.1),
             getattr(base_champ, 'mana_max', 100),
             getattr(base_champ, 'mana_start', 0),
             getattr(base_champ, 'attack_speed', 0.7),
             getattr(base_champ, 'attack_range', 1),
-            # getattr(base_champ, 'sprite_path', None), 
-            # getattr(base_champ, 'sprite_offset_y', 0)
+            cost=getattr(base_champ, 'cost', 1),
+            traits=getattr(base_champ, 'traits', [])
         )
         upgraded.level = new_level
-        upgraded.max_hp = upgraded.hp
+        upgraded.max_hp = upgraded.base_hp
+        upgraded.hp = upgraded.max_hp
         
-       #  if upgraded.image_path:
-           # try:
-             #   img = pygame.image.load(upgraded.image_path).convert_alpha()
-              #  upgraded.image = pygame.transform.scale(img, self.card_size)
-           # except Exception as e:
-           #     upgraded.image = None
+        # 4. Trasferisci, combina ed equipaggia tutti gli oggetti raccolti
+        excess_items = []
+        for item in collected_items:
+            res, obj = upgraded.equip_item(item)
+            if res == 'full':
+                excess_items.append(item)
+                
+        # Restituisci gli oggetti in eccesso al banco oggetti del giocatore
+        for excess in excess_items:
+            if len(self.game.player_items) < 8:
+                self.game.player_items.append(excess)
+                print(f"Restituito oggetto in eccesso al banco: {excess}")
         
-        # 4. Aggiungi il campione potenziato alla panchina (se c'è spazio)
-        if len(self.game.bench) < self.game.bench_slots:
-            self.game.bench.append(upgraded)
-            print(f"Creato {upgraded.name} Lvl {upgraded.level} e messo in panchina.")
-            # Controlla ricorsivamente se questo nuovo campione crea un altro merge!
-            self.merge_champions(upgraded)
+        # 5. Posizionamento: se una copia era sulla board, mantienilo sulla board
+        placed = False
+        if preferred_board_slot is not None and self.game.board[preferred_board_slot] is None:
+            self.game.board[preferred_board_slot] = upgraded
+            placed = True
+            print(f"Schierato {upgraded.name} Lvl {upgraded.level} direttamente sulla scacchiera nello slot {preferred_board_slot}.")
         else:
-            print(f"Creato {upgraded.name} Lvl {upgraded.level}, ma panchina piena! Campione perso.")
-            # In un vero TFT, il campione verrebbe "spostato". Per ora, è perso.
+            # Cerca posto in panchina
+            for i in range(self.game.bench_slots):
+                if self.game.bench[i] is None:
+                    self.game.bench[i] = upgraded
+                    placed = True
+                    print(f"Messo {upgraded.name} Lvl {upgraded.level} in panchina nello slot {i}.")
+                    break
+                    
+        # Se panchina piena e c'era posto in board
+        if not placed:
+            for i in range(self.game.board_slots):
+                if self.game.board[i] is None:
+                    self.game.board[i] = upgraded
+                    placed = True
+                    break
+
+        if hasattr(self.game, 'audio'):
+            self.game.audio.play_sfx("merge_star")
             
+        # Controlla ricorsivamente se ora si può fare un 3 stelle!
+        self.merge_champions(upgraded)
         return True
 
-    # Sostituisci l'intero metodo handle_event
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         
-        # --- AGGIUNGI QUESTO BLOCCO PER LO SCROLL ---
+        if hasattr(self.game, 'damage_meter') and self.game.damage_meter.handle_event(event):
+            return
+            
         if event.type == pygame.MOUSEWHEEL:
-            # event.y è 1 se si scorre in su, -1 se si scorre in giù
-            # Moltiplichiamo per una velocità (es. 30 pixel)
             self.scroll_y += event.y * 30
-            
-            # Limitiamo lo scorrimento per non "uscire" dallo schermo
-            # 0 è il punto più alto (non si può scorrere più in su)
-            # -250 è il punto più basso (limite da aggiustare se serve)
-            self.scroll_y = max(-250, min(0, self.scroll_y)) 
-            return # Evento gestito
+            self.scroll_y = max(-350, min(0, self.scroll_y)) 
+            return 
         
-        # --- LOGICA DRAG & DROP (Inizio) ---
-        if self.is_dragging and event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            # --- RILASCIO (DROP) ---
-            self.is_dragging = False
-            
-            # Troviamo lo slot più vicino
+        # Dropping Oggetti su Campioni
+        if self.is_dragging_item and event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.is_dragging_item = False
             board_rects = self.get_board_rects()
             bench_rects = self.get_bench_rects()
             
-            # 1. Prova a droppare sulla SCACCHIERA
+            target_champ = None
+            for i, rect in enumerate(board_rects):
+                if rect.collidepoint(mouse_pos) and self.game.board[i]:
+                    target_champ = self.game.board[i]
+                    break
+            if not target_champ:
+                for i, rect in enumerate(bench_rects):
+                    if rect.collidepoint(mouse_pos) and self.game.bench[i]:
+                        target_champ = self.game.bench[i]
+                        break
+                        
+            if target_champ:
+                status, res = target_champ.equip_item(self.dragged_item_key)
+                if status in ["combined", "equipped"]:
+                    if self.dragged_item_idx < len(self.game.player_items):
+                        self.game.player_items.pop(self.dragged_item_idx)
+                    if status == "combined":
+                        if hasattr(self.game, 'audio'): self.game.audio.play_sfx("merge_star")
+                        print(f"✨ FUSIONE OGGETTO! Creato: {res['name']} per {target_champ.name}!")
+                    else:
+                        if hasattr(self.game, 'audio'): self.game.audio.play_sfx("drop_token")
+                        print(f"Equipaggiato {res['name']} su {target_champ.name}.")
+                else:
+                    print("Campione già pieno (max 3 oggetti)!")
+            self.dragged_item_key = None
+            return
+
+        if self.is_dragging and event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.is_dragging = False
+            
+            board_rects = self.get_board_rects()
+            bench_rects = self.get_bench_rects()
+            
+            # Dropping on BOARD
             for i, rect in enumerate(board_rects):
                 if rect.collidepoint(mouse_pos):
-                    # Hai droppato su uno slot della scacchiera
-                    if len(self.game.board) < self.game.board_slots or i < len(self.game.board):
-                        # Metti il campione nello slot (o scambia)
-                        self.place_champ_in_list(self.game.board, i, self.game.board_slots)
-                        return # Lavoro finito
-                    else:
-                        break # La scacchiera è piena, non puoi droppare qui
+                    # Controllo limite di campioni attivi
+                    active_count = sum(1 for c in self.game.board if c is not None)
+                    if self.dragged_from_list == self.game.bench and active_count >= self.game.player_level and self.game.board[i] is None:
+                        print("Livello insufficiente per aggiungere un altro campione!")
+                        self.return_dragged_champ()
+                        return
+                    
+                    self.place_champ_in_list(self.game.board, i)
+                    return
             
-            # 2. Prova a droppare sulla PANCHINA
+            # Dropping on BENCH
             for i, rect in enumerate(bench_rects):
                 if rect.collidepoint(mouse_pos):
-                    # Hai droppato su uno slot della panchina
-                    self.place_champ_in_list(self.game.bench, i, self.game.bench_slots)
-                    return # Lavoro finito
+                    self.place_champ_in_list(self.game.bench, i)
+                    return
 
-            # 3. Droppato fuori: rimetti il campione da dove è venuto
             self.return_dragged_champ()
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN:
-            # --- LOGICA VENDITA (Click Destro) ---
-            if event.button == 3: # Click destro
+            if event.button == 3: # Click destro per vendere
                 board_rects = self.get_board_rects()
                 bench_rects = self.get_bench_rects()
                 
-                # Controlla scacchiera
                 for i, rect in enumerate(board_rects):
-                    if rect.collidepoint(mouse_pos) and i < len(self.game.board) and self.game.board[i]:
-                        champ_to_sell = self.game.board.pop(i)
-                        self.sell_champion(champ_to_sell)
-                        return # Venduto
-                # Controlla panchina
+                    if rect.collidepoint(mouse_pos) and self.game.board[i]:
+                        self.sell_champion(self.game.board[i])
+                        self.game.board[i] = None
+                        return 
                 for i, rect in enumerate(bench_rects):
-                    if rect.collidepoint(mouse_pos) and i < len(self.game.bench) and self.game.bench[i]:
-                        champ_to_sell = self.game.bench.pop(i)
-                        self.sell_champion(champ_to_sell)
-                        return # Venduto
-                return # Click destro a vuoto
+                    if rect.collidepoint(mouse_pos) and self.game.bench[i]:
+                        self.sell_champion(self.game.bench[i])
+                        self.game.bench[i] = None
+                        return 
+                return 
 
-            # --- LOGICA CLICK SINISTRO ---
             if event.button == 1:
-                # 1. Controlla i bottoni UI (Compra, Reroll, Conferma)
                 if self.refresh_button_rect.collidepoint(mouse_pos):
-                    print("Click Reroll")
                     self.roll_shop()
                     return
-                if self.confirm_button_rect.collidepoint(mouse_pos) and len(self.game.board) > 0: # Ora basta > 0
-                    print("Click Conferma -> Avvio Battaglia")
+                if self.buy_xp_button_rect.collidepoint(mouse_pos):
+                    self.game.buy_xp()
+                    return
+                if self.confirm_button_rect.collidepoint(mouse_pos) and any(c is not None for c in self.game.board):
                     self.game.start_battle()
                     return
                 for i, rect in enumerate(self.buy_buttons):
                     if rect.collidepoint(mouse_pos):
-                        champ_in_slot = self.shop_champs[i]
-                        if champ_in_slot:
-                            print(f"Click Compra slot {i}: {champ_in_slot.name}")
-                            self.buy_champion(champ_in_slot, i)
-                            return
+                        if self.shop_champs[i]:
+                            self.buy_champion(self.shop_champs[i], i)
+                        return
                 
-                # 2. Controlla se iniziamo un DRAG
+                # Inizia DRAG OGGETTI
+                item_rects = self.get_item_bench_rects()
+                for i, rect in enumerate(item_rects):
+                    if rect.collidepoint(mouse_pos) and i < len(self.game.player_items):
+                        self.is_dragging_item = True
+                        self.dragged_item_idx = i
+                        self.dragged_item_key = self.game.player_items[i]
+                        return
+
+                # Inizia DRAG CAMPIONI
                 board_rects = self.get_board_rects()
                 bench_rects = self.get_bench_rects()
                 
-                # Scacchiera
                 for i, rect in enumerate(board_rects):
-                    if rect.collidepoint(mouse_pos) and i < len(self.game.board) and self.game.board[i]:
+                    if rect.collidepoint(mouse_pos) and self.game.board[i]:
                         self.start_dragging(self.game.board, i)
                         return
-                # Panchina
                 for i, rect in enumerate(bench_rects):
-                    if rect.collidepoint(mouse_pos) and i < len(self.game.bench) and self.game.bench[i]:
+                    if rect.collidepoint(mouse_pos) and self.game.bench[i]:
                         self.start_dragging(self.game.bench, i)
                         return
     
-    # Aggiungi questi metodi alla classe ShopManager
-
     def sell_champion(self, champion):
-        """ Logica di vendita """
-        # Per ora prezzo fisso, in futuro dipenderà dal costo/livello
-        sell_price = 2
+        level = getattr(champion, 'level', 1)
+        cost = getattr(champion, 'cost', 1)
+        
+        total_invested = cost * (3 ** (level - 1))
+        sell_price = total_invested if level == 1 else max(1, total_invested - 1)
+        
         self.game.player_gold += sell_price
-        print(f"Venduto {champion.name} per {sell_price}g. Oro totale: {self.game.player_gold}")
+        if hasattr(self.game, 'audio'):
+            self.game.audio.play_sfx("sell")
+        print(f"Venduto {champion.name} Lvl {level} per {sell_price}g.")
 
     def start_dragging(self, from_list, index):
-        """ Prepara un campione per il trascinamento """
-        if self.is_dragging: return # Stai già trascinando
+        if self.is_dragging: return 
         
-        self.dragged_champ = from_list.pop(index) # Rimuovi e tieni in mano
-        self.dragged_from_list = from_list # Salva da dove è venuto (la lista stessa)
-        self.dragged_from_index = index # Salva lo slot originale
+        self.dragged_champ = from_list[index]
+        from_list[index] = None 
+        self.dragged_from_list = from_list 
+        self.dragged_from_index = index 
         self.is_dragging = True
-        print(f"Dragging {self.dragged_champ.name}")
 
-    def place_champ_in_list(self, target_list, target_index, max_slots):
-        """ Piazza il campione trascinato in uno slot (o scambia) """
-        
-        # Assicura che le liste non siano più grandi del loro max
-        while len(self.game.board) > self.game.board_slots: self.game.board.pop()
-        while len(self.game.bench) > self.game.bench_slots: self.game.bench.pop()
-        
-        # Controlla se lo slot di destinazione è vuoto
-        if target_index >= len(target_list):
-            target_list.append(self.dragged_champ)
-            # Rimuovi placeholder se necessario (dopo uno swap)
-            if self.dragged_from_list == target_list and self.dragged_from_index < len(target_list):
-                 target_list.pop(self.dragged_from_index)
-        else:
-            # Lo slot è occupato: SCAMBIA
-            champ_in_slot = target_list[target_index]
-            target_list[target_index] = self.dragged_champ
-            # Rimetti il campione scambiato da dove sei venuto
-            self.dragged_from_list.insert(self.dragged_from_index, champ_in_slot)
+    def place_champ_in_list(self, target_list, target_index):
+        # Se lo slot è occupato, facciamo swap
+        champ_in_slot = target_list[target_index]
+        target_list[target_index] = self.dragged_champ
+        self.dragged_from_list[self.dragged_from_index] = champ_in_slot
             
         self.is_dragging = False
         self.dragged_champ = None
+        if hasattr(self.game, 'audio'):
+            self.game.audio.play_sfx("drop_token")
 
     def return_dragged_champ(self):
-        """ Rimette il campione nello slot originale se il drop è invalido """
         if self.dragged_champ:
-            self.dragged_from_list.insert(self.dragged_from_index, self.dragged_champ)
+            self.dragged_from_list[self.dragged_from_index] = self.dragged_champ
         self.is_dragging = False
         self.dragged_champ = None
 
     def get_board_rects(self):
-        """ Calcola i rect della scacchiera per i click """
         rects = []
-        x_start = (self.game.screen.get_width() - (self.game.board_slots * 180)) // 2 + 50
-        y = self.game.screen.get_height() - 300 + self.scroll_y
-        for i in range(self.game.board_slots):
-            x = x_start + i * 180
-            rects.append(pygame.Rect(x, y, 150, 150))
+        cell_w, cell_h = 100, 100
+        cols, rows = 7, 2
+        x_start = (self.game.screen.get_width() - (cols * cell_w)) // 2
+        y_start = self.game.screen.get_height() - 400 + self.scroll_y
+        
+        for r in range(rows):
+            for c in range(cols):
+                x = x_start + c * cell_w
+                y = y_start + r * cell_h
+                rects.append(pygame.Rect(x, y, cell_w, cell_h))
         return rects
         
     def get_bench_rects(self):
-        """ Calcola i rect della panchina per i click """
         rects = []
-        x_start = (self.game.screen.get_width() - (self.game.bench_slots * 160)) // 2 + 30
-        y = self.game.screen.get_height() - 70 + self.scroll_y
+        cell_w, cell_h = 100, 100
+        x_start = (self.game.screen.get_width() - (self.game.bench_slots * cell_w)) // 2
+        y = self.game.screen.get_height() - 150 + self.scroll_y
         for i in range(self.game.bench_slots):
-            x = x_start + i * 160
-            rects.append(pygame.Rect(x, y, 150, 150))
+            x = x_start + i * cell_w
+            rects.append(pygame.Rect(x, y, cell_w, cell_h))
         return rects
 
-    # Sostituisci l'intero metodo draw con questo CORRETTO
+    def get_item_bench_rects(self):
+        rects = []
+        slot_size = 44
+        spacing = 6
+        x_start = 20
+        y_start = self.game.screen.get_height() - 105 + self.scroll_y
+        for i in range(8):
+            col = i % 4
+            row = i // 4
+            x = x_start + col * (slot_size + spacing)
+            y = y_start + row * (slot_size + spacing)
+            rects.append(pygame.Rect(x, y, slot_size, slot_size))
+        return rects
+
+    def draw_champ_items(self, surface, champ, cx, cy):
+        items = getattr(champ, "items", [])
+        if not items:
+            return
+        item_font = pygame.font.SysFont("Arial", 9, bold=True)
+        for idx, item in enumerate(items[:3]):
+            data = get_item_data(item)
+            ix = cx - 20 + idx * 20
+            iy = cy + 18
+            ibox = pygame.Rect(ix - 8, iy - 6, 18, 13)
+            pygame.draw.rect(surface, data.get("color", (100, 100, 100)), ibox, border_radius=3)
+            pygame.draw.rect(surface, (0, 0, 0), ibox, width=1, border_radius=3)
+            tag_text = data.get("tag", "ITM")
+            draw_text(tag_text, item_font, (255, 255, 255), surface, ibox.centerx, ibox.centery)
+
     def draw(self, surface):
-        surface.fill((20, 20, 20))
         mouse_pos = pygame.mouse.get_pos()
         
-        # --- UI ALTA (FISSA) ---
-        draw_text("Negozio Campioni", TITLE_FONT, BLUE, surface, surface.get_width() // 2, 60)
-        draw_text(f"Oro: {self.game.player_gold}", BUTTON_FONT, GOLD, surface, surface.get_width() - 100, 40)
-        draw_text(f"HP: {self.game.player_hp}", BUTTON_FONT, GREEN, surface, 100, 40)
-        draw_text(f"Round: {self.game.round_number}", BUTTON_FONT, WHITE, surface, 100, 80)
+        # --- 1. SFONDO ARENA AI ---
+        bg_surf = get_background_image("board_bg", surface.get_width(), surface.get_height())
+        surface.blit(bg_surf, (0, 0))
+        
+        # Overlay scuro per contrasto
+        overlay = pygame.Surface((surface.get_width(), surface.get_height()), pygame.SRCALPHA)
+        overlay.fill((10, 14, 22, 145))
+        surface.blit(overlay, (0, 0))
+        
+        # --- 2. TOP BAR (STATO GIOCATORE CON PILLOLE CURVE) ---
+        top_bar_rect = pygame.Rect(surface.get_width() // 2 - 490, 12, 980, 50)
+        draw_glass_panel(surface, top_bar_rect, border_radius=25, bg_color=(12, 16, 26, 220), border_color=(190, 160, 65, 170), border_width=1)
+        
+        stat_font = pygame.font.SysFont("Arial", 14, bold=True)
+        small_font = pygame.font.SysFont("Arial", 11, bold=True)
+        
+        # Pillola HP
+        hp_rect = pygame.Rect(top_bar_rect.x + 18, 19, 115, 36)
+        draw_glass_panel(surface, hp_rect, border_radius=18, bg_color=(25, 55, 35, 230), border_color=(60, 200, 100, 200), border_width=1)
+        draw_text(f"HP: {self.game.player_hp}", stat_font, (120, 255, 160), surface, hp_rect.centerx, hp_rect.centery)
+        
+        # Pillola Oro
+        gold_rect = pygame.Rect(top_bar_rect.x + 148, 19, 120, 36)
+        draw_glass_panel(surface, gold_rect, border_radius=18, bg_color=(55, 45, 15, 230), border_color=(255, 215, 60, 220), border_width=1)
+        draw_text(f"ORO: {self.game.player_gold}g", stat_font, GOLD, surface, gold_rect.centerx, gold_rect.centery)
+        
+        # Pillola Round
+        round_rect = pygame.Rect(top_bar_rect.right - 145, 19, 125, 36)
+        draw_glass_panel(surface, round_rect, border_radius=18, bg_color=(35, 40, 55, 230), border_color=(140, 160, 200, 200), border_width=1)
+        draw_text(f"ROUND: {self.game.round_number}", stat_font, (220, 235, 255), surface, round_rect.centerx, round_rect.centery)
+        
+        # Pillola Livello & Barra XP
+        lvl_rect = pygame.Rect(top_bar_rect.x + 282, 19, 390, 36)
+        draw_glass_panel(surface, lvl_rect, border_radius=18, bg_color=(20, 35, 55, 230), border_color=(60, 140, 240, 200), border_width=1)
+        
+        curr_xp = self.game.player_xp
+        max_xp = self.game.xp_to_level.get(self.game.player_level, 999)
+        draw_text(f"LVL {self.game.player_level}", stat_font, (140, 210, 255), surface, lvl_rect.x + 48, lvl_rect.centery)
+        
+        # Barra di avanzamento XP
+        bar_x = lvl_rect.x + 105
+        bar_y = lvl_rect.centery - 7
+        bar_w = 200
+        bar_h = 14
+        pygame.draw.rect(surface, (15, 20, 30), (bar_x, bar_y, bar_w, bar_h), border_radius=7)
+        if max_xp > 0:
+            pct = min(1.0, curr_xp / max_xp)
+            if pct > 0:
+                pygame.draw.rect(surface, (40, 160, 255), (bar_x, bar_y, int(bar_w * pct), bar_h), border_radius=7)
+        pygame.draw.rect(surface, (100, 180, 255), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=7)
+        draw_text(f"{curr_xp}/{max_xp} XP", small_font, WHITE, surface, bar_x + bar_w // 2, lvl_rect.centery)
 
-        # --- DISEGNA NEGOZIO ---
+        # --- 3. RACK NEGOZIO (CARTE CAMPIONI CURVE SENZA SOVRAPPOSIZIONI) ---
+        shop_rack_rect = pygame.Rect(200, self.margin_y + self.scroll_y - 8, 1040, self.card_size[1] + 16)
+        draw_glass_panel(surface, shop_rack_rect, border_radius=20, bg_color=(12, 16, 25, 210), border_color=(70, 85, 110, 140), border_width=1)
+        
         self.buy_buttons.clear() 
         for i, champ in enumerate(self.shop_champs):
-            x = 80 + i * self.spacing_x
+            x = 215 + i * self.spacing_x
             y = self.margin_y + self.scroll_y
             card_rect = pygame.Rect(x, y, *self.card_size)
+            
             if champ: 
-                # Greyboxing: Rettangolo colorato
-                pygame.draw.rect(surface, champ.color, card_rect, border_radius=10)
-                pygame.draw.rect(surface, WHITE, card_rect, width=2, border_radius=10)
-                # Fix per Ezreal: Sfondo giallo richiede testo nero
-                text_color = BLACK if champ.name == "Ezreal" else WHITE
-                draw_text(champ.name, TEXT_FONT, text_color, surface, x + 75, y + 75)
+                # 1. Sfondo Card Completa
+                pygame.draw.rect(surface, (18, 22, 32), card_rect, border_radius=14)
                 
-                # Bottone Compra
-                buy_button = pygame.Rect(x, y + self.card_size[1] + 40, self.card_size[0], 40)
+                # 2. Illustrazione del Campione (Sezione superiore)
+                img_h = 108
+                card_img = champ.get_card_surface(self.card_size[0], img_h)
+                surface.blit(card_img, (x, y))
+                
+                # Bordo Tier Curvo sulla porzione immagine
+                tier_color = getattr(champ, 'tier_color', WHITE)
+                pygame.draw.rect(surface, tier_color, (x, y, self.card_size[0], img_h), width=2, border_radius=14)
+                
+                # 3. Badge Costo Curvo in alto a destra
+                cost_badge = pygame.Rect(x + self.card_size[0] - 38, y + 6, 32, 20)
+                pygame.draw.rect(surface, (12, 15, 22, 230), cost_badge, border_radius=6)
+                pygame.draw.rect(surface, GOLD, cost_badge, width=1, border_radius=6)
+                draw_text(f"{champ.cost}g", pygame.font.SysFont("Arial", 12, bold=True), GOLD, surface, cost_badge.centerx, cost_badge.centery)
+                
+                # 4. Tratti Campione (Spazio dedicato sotto l'immagine)
+                traits_str = " • ".join(getattr(champ, "traits", []))
+                trait_font = pygame.font.SysFont("Arial", 11, bold=True)
+                draw_text(traits_str, trait_font, (215, 215, 165), surface, x + self.card_size[0]//2, y + img_h + 12)
+                
+                # 5. Nome Campione
+                name_font = pygame.font.SysFont("Arial", 14, bold=True)
+                draw_text(champ.name, name_font, WHITE, surface, x + self.card_size[0]//2, y + img_h + 30)
+                
+                # 6. Bordo Totale Card
+                pygame.draw.rect(surface, tier_color, card_rect, width=1, border_radius=14)
+                
+                # 7. Bottone Compra Integrato sul fondo della card
+                buy_button = pygame.Rect(x + 10, y + self.card_size[1] - 38, self.card_size[0] - 20, 30)
                 self.buy_buttons.append(buy_button) 
-                can_buy = self.game.player_gold >= 3 and len(self.game.bench) < self.game.bench_slots
-                btn_color = GREEN if can_buy else GRAY
-                pygame.draw.rect(surface, btn_color, buy_button, border_radius=8)
-                draw_text("Compra (3g)", TEXT_FONT, BLACK, surface, buy_button.centerx, buy_button.centery)
+                
+                can_buy = self.game.player_gold >= champ.cost and any(s is None for s in self.game.bench)
+                btn_is_hover = buy_button.collidepoint(mouse_pos)
+                
+                if can_buy:
+                    btn_color = (35, 175, 75) if btn_is_hover else (25, 130, 55)
+                    border_btn = (100, 240, 130) if btn_is_hover else (50, 180, 80)
+                else:
+                    btn_color = (45, 48, 58)
+                    border_btn = (70, 75, 88)
+                    
+                pygame.draw.rect(surface, btn_color, buy_button, border_radius=15)
+                pygame.draw.rect(surface, border_btn, buy_button, width=1, border_radius=15)
+                draw_text(f"Compra ({champ.cost}g)", pygame.font.SysFont("Arial", 13, bold=True), WHITE if can_buy else (150, 150, 160), surface, buy_button.centerx, buy_button.centery)
             else:
-                pygame.draw.rect(surface, (30,30,30), card_rect, border_radius=10)
+                # Slot Shop Vuoto
+                draw_glass_panel(surface, card_rect, border_radius=14, bg_color=(18, 22, 32, 160), border_color=(40, 48, 60, 140), border_width=1)
                 self.buy_buttons.append(pygame.Rect(0,0,0,0)) 
 
-        # --- DISEGNA SCACCHIERA ---
-        draw_text(f"Scacchiera ({len(self.game.board)}/{self.game.board_slots})", BUTTON_FONT, GOLD, surface, surface.get_width() // 2, HEIGHT - 330 + self.scroll_y)
+        # --- 4. PANNELLO SINERGIE LATERALE A SINISTRA & CLASSIFICA A DESTRA & AUGMENTS ---
+        bonus_traits = []
+        player_augments = getattr(self.game, 'player_augments', [])
+        if "demacia_crown" in player_augments:
+            bonus_traits.append("Demacia")
+        if "piltover_heart" in player_augments:
+            bonus_traits.append("Piltover")
+        if "ionia_soul" in player_augments:
+            bonus_traits.append("Ionia")
+            
+        active_board_champs = [c for c in self.game.board if c is not None]
+        active_traits = calculate_team_traits(active_board_champs, bonus_traits=bonus_traits)
+        
+        draw_hud_augments(surface, mouse_pos, player_augments, start_x=12, start_y=30 + self.scroll_y)
+        draw_traits_sidebar(surface, active_traits, start_x=12, start_y=75 + self.scroll_y)
+        
+        # --- DAMAGE METER (POST-BATTAGLIA) ---
+        if hasattr(self.game, 'damage_meter') and getattr(self.game, 'last_battle_player_team', None):
+            meter_y = max(390, 75 + len(active_traits) * 44 + 36) + self.scroll_y
+            self.game.damage_meter.draw(
+                surface, mouse_pos, self.game.last_battle_player_team, 
+                elapsed_seconds=getattr(self.game, 'last_battle_duration', 5.0), 
+                start_x=12, start_y=meter_y
+            )
+        
+        if hasattr(self.game, 'lobby_manager'):
+            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=1230, start_y=75 + self.scroll_y)
+
+        # --- 5. SCACCHIERA (CELLE CURVE TRASLUCIDE) ---
+        active_count = sum(1 for c in self.game.board if c is not None)
+        title_tag = pygame.Rect(surface.get_width() // 2 - 120, HEIGHT - 425 + self.scroll_y - 12, 240, 26)
+        draw_glass_panel(surface, title_tag, border_radius=13, bg_color=(15, 20, 30, 210), border_color=(190, 160, 60, 160), border_width=1)
+        draw_text(f"Scacchiera ({active_count}/{self.game.player_level})", stat_font, GOLD, surface, title_tag.centerx, title_tag.centery)
+        
         board_rects = self.get_board_rects() 
         for i in range(self.game.board_slots):
             rect = board_rects[i]
-            pygame.draw.rect(surface, (40, 40, 40), rect, border_radius=10, width=3)
+            is_hover_slot = rect.collidepoint(mouse_pos)
             
-            if i < len(self.game.board) and self.game.board[i]:
-                champ = self.game.board[i]
-                # Greyboxing: Rettangolo colorato nello slot
-                # Creiamo un rettangolo leggermente più piccolo dello slot
-                champ_rect = rect.inflate(-10, -10) 
-                pygame.draw.rect(surface, champ.color, champ_rect, border_radius=10)
+            slot_bg = (28, 38, 52, 220) if is_hover_slot else (18, 24, 35, 180)
+            slot_border = (80, 180, 240, 200) if is_hover_slot else (45, 55, 75, 140)
+            
+            cell_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(cell_surf, slot_bg, (0, 0, rect.width, rect.height), border_radius=12)
+            pygame.draw.rect(cell_surf, slot_border, (0, 0, rect.width, rect.height), width=1, border_radius=12)
+            surface.blit(cell_surf, (rect.x, rect.y))
+            
+            champ = self.game.board[i]
+            if champ:
+                # Ombra al suolo
+                shadow_surf = pygame.Surface((56, 16), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow_surf, (5, 8, 14, 150), (0, 0, 56, 16))
+                surface.blit(shadow_surf, (rect.centerx - 28, rect.centery + 12))
                 
-                name_color = GOLD if getattr(champ, "level", 1) > 1 else WHITE
-                draw_text(champ.name, TEXT_FONT, name_color, surface, rect.centerx, rect.bottom + 20)
-                # Stelle
+                # Sprite Personaggio 2D
+                sprite = champ.get_sprite_surface(width=72, height=72)
+                surface.blit(sprite, (rect.centerx - 36, rect.centery - 38))
+                
                 stars = getattr(champ, "level", 1)
-                if stars > 1:
+                if stars >= 2:
                     for s in range(min(stars, 3)):
-                        cx = rect.left + 20 + s * 20
-                        cy = rect.top - 12
-                        pygame.draw.circle(surface, GOLD, (cx, cy), 6)
+                        cx = rect.centerx - (stars - 1) * 7 + s * 14
+                        cy = rect.top + 8
+                        pygame.draw.circle(surface, GOLD, (cx, cy), 4)
+                        pygame.draw.circle(surface, (0, 0, 0), (cx, cy), 4, width=1)
+                
+                name_color = GOLD if stars > 1 else WHITE
+                draw_text(champ.name, TEXT_FONT, (0,0,0), surface, rect.centerx + 1, rect.bottom - 9)
+                draw_text(champ.name, TEXT_FONT, name_color, surface, rect.centerx, rect.bottom - 10)
+                
+                self.draw_champ_items(surface, champ, rect.centerx, rect.centery + 14)
 
-        # --- DISEGNA PANCHINA ---
-        draw_text(f"Panchina ({len(self.game.bench)}/{self.game.bench_slots})", BUTTON_FONT, GOLD, surface, surface.get_width() // 2, HEIGHT - 100 + self.scroll_y)
+        # --- 6. PANCHINA (CELLE CURVE) ---
+        bench_tag = pygame.Rect(surface.get_width() // 2 - 75, HEIGHT - 180 + self.scroll_y - 12, 150, 26)
+        draw_glass_panel(surface, bench_tag, border_radius=13, bg_color=(15, 20, 30, 210), border_color=(190, 160, 60, 160), border_width=1)
+        draw_text("Panchina", stat_font, GOLD, surface, bench_tag.centerx, bench_tag.centery)
+        
         bench_rects = self.get_bench_rects()
         for i in range(self.game.bench_slots):
             rect = bench_rects[i]
-            pygame.draw.rect(surface, (40, 40, 40), rect, border_radius=10, width=3)
+            is_hover_slot = rect.collidepoint(mouse_pos)
             
-            if i < len(self.game.bench) and self.game.bench[i]:
-                champ = self.game.bench[i]
-                # Greyboxing: Rettangolo colorato
-                champ_rect = rect.inflate(-10, -10)
-                pygame.draw.rect(surface, champ.color, champ_rect, border_radius=10)
+            slot_bg = (28, 38, 52, 220) if is_hover_slot else (18, 24, 35, 180)
+            slot_border = (80, 180, 240, 200) if is_hover_slot else (45, 55, 75, 140)
+            
+            cell_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(cell_surf, slot_bg, (0, 0, rect.width, rect.height), border_radius=12)
+            pygame.draw.rect(cell_surf, slot_border, (0, 0, rect.width, rect.height), width=1, border_radius=12)
+            surface.blit(cell_surf, (rect.x, rect.y))
+            
+            champ = self.game.bench[i]
+            if champ:
+                # Ombra al suolo
+                shadow_surf = pygame.Surface((56, 16), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow_surf, (5, 8, 14, 150), (0, 0, 56, 16))
+                surface.blit(shadow_surf, (rect.centerx - 28, rect.centery + 12))
                 
-                name_color = GOLD if getattr(champ, "level", 1) > 1 else WHITE
-                draw_text(champ.name, TEXT_FONT, name_color, surface, rect.centerx, rect.bottom + 20)
+                # Sprite Personaggio 2D
+                sprite = champ.get_sprite_surface(width=72, height=72)
+                surface.blit(sprite, (rect.centerx - 36, rect.centery - 38))
+                
                 stars = getattr(champ, "level", 1)
-                if stars > 1:
+                if stars >= 2:
                     for s in range(min(stars, 3)):
-                        cx = rect.left + 20 + s * 20
-                        cy = rect.top - 12
-                        pygame.draw.circle(surface, GOLD, (cx, cy), 6)
+                        cx = rect.centerx - (stars - 1) * 7 + s * 14
+                        cy = rect.top + 8
+                        pygame.draw.circle(surface, GOLD, (cx, cy), 4)
+                        pygame.draw.circle(surface, (0, 0, 0), (cx, cy), 4, width=1)
+                
+                name_color = GOLD if stars > 1 else WHITE
+                draw_text(champ.name, TEXT_FONT, (0,0,0), surface, rect.centerx + 1, rect.bottom - 9)
+                draw_text(champ.name, TEXT_FONT, name_color, surface, rect.centerx, rect.bottom - 10)
+                
+                self.draw_champ_items(surface, champ, rect.centerx, rect.centery + 14)
 
-        # --- UI BASSA (FISSA) ---
-        pygame.draw.rect(surface, LIGHT_BLUE, self.refresh_button_rect, border_radius=10)
-        draw_text("Reroll (-2g)", BUTTON_FONT, WHITE, surface, self.refresh_button_rect.centerx, self.refresh_button_rect.centery)
-        can_confirm = len(self.game.board) > 0 
-        btn_color = BLUE if can_confirm else GRAY
-        pygame.draw.rect(surface, btn_color, self.confirm_button_rect, border_radius=10)
-        draw_text("CONFERMA", BUTTON_FONT, WHITE, surface, self.confirm_button_rect.centerx, self.confirm_button_rect.centery)
+        # --- 7. UI BASSA (BOTTONI CURVI SPAZIATI CORRETTAMENTE) ---
+        # Bottone Compra XP
+        can_xp = self.game.player_gold >= 4 and self.game.player_level < 9
+        xp_hover = self.buy_xp_button_rect.collidepoint(mouse_pos)
+        x_color = (35, 140, 240) if xp_hover and can_xp else ((25, 105, 195) if can_xp else (50, 52, 60))
+        pygame.draw.rect(surface, x_color, self.buy_xp_button_rect, border_radius=24)
+        pygame.draw.rect(surface, (100, 200, 255) if can_xp else (70, 75, 85), self.buy_xp_button_rect, width=2, border_radius=24)
+        draw_text("COMPRA XP (4g)", BUTTON_FONT, WHITE if can_xp else (150, 150, 150), surface, self.buy_xp_button_rect.centerx, self.buy_xp_button_rect.centery)
 
-        # --- DISEGNA CAMPIONE TRASCINATO (SOPRA TUTTO) ---
-        # CORREZIONE IMPORTANTE: Usiamo il colore, non l'immagine!
+        # Bottone Reroll
+        reroll_hover = self.refresh_button_rect.collidepoint(mouse_pos)
+        can_reroll = self.game.player_gold >= 2
+        r_color = (210, 140, 20) if reroll_hover and can_reroll else ((170, 110, 15) if can_reroll else (50, 52, 60))
+        pygame.draw.rect(surface, r_color, self.refresh_button_rect, border_radius=24)
+        pygame.draw.rect(surface, (255, 210, 80) if can_reroll else (70, 75, 85), self.refresh_button_rect, width=2, border_radius=24)
+        draw_text("REROLL (2g)", BUTTON_FONT, WHITE if can_reroll else (150, 150, 150), surface, self.refresh_button_rect.centerx, self.refresh_button_rect.centery)
+
+        # Bottone Inizia Battaglia
+        can_confirm = active_count > 0 
+        btn_hover = self.confirm_button_rect.collidepoint(mouse_pos)
+        c_color = (35, 185, 85) if btn_hover and can_confirm else ((25, 145, 65) if can_confirm else (50, 52, 60))
+        pygame.draw.rect(surface, c_color, self.confirm_button_rect, border_radius=24)
+        pygame.draw.rect(surface, (120, 255, 160) if can_confirm else (70, 75, 85), self.confirm_button_rect, width=2, border_radius=24)
+        draw_text("COMBATTI", BUTTON_FONT, WHITE if can_confirm else (150, 150, 150), surface, self.confirm_button_rect.centerx, self.confirm_button_rect.centery)
+
+        # --- 8. BANCO INVENTARIO OGGETTI (CURVO GLASSMORPHISM) ---
+        item_box_rect = pygame.Rect(12, HEIGHT - 118 + self.scroll_y, 200, 100)
+        draw_glass_panel(surface, item_box_rect, border_radius=16, bg_color=(14, 18, 28, 220), border_color=(190, 160, 60, 160), border_width=1)
+        
+        item_title_font = pygame.font.SysFont("Arial", 11, bold=True)
+        draw_text("BANCO OGGETTI", item_title_font, GOLD, surface, item_box_rect.centerx, item_box_rect.top + 12)
+        
+        item_rects = self.get_item_bench_rects()
+        item_font = pygame.font.SysFont("Arial", 12, bold=True)
+        
+        hovered_item_desc = None
+        for i, rect in enumerate(item_rects):
+            pygame.draw.rect(surface, (20, 26, 38), rect, border_radius=8)
+            pygame.draw.rect(surface, (60, 75, 95), rect, width=1, border_radius=8)
+            
+            if i < len(self.game.player_items):
+                item_key = self.game.player_items[i]
+                data = get_item_data(item_key)
+                
+                # Slot pieno
+                pygame.draw.rect(surface, data.get("color", (100, 100, 100)), rect.inflate(-4, -4), border_radius=6)
+                tag_text = data.get("tag", "ITM")
+                draw_text(tag_text, item_font, WHITE, surface, rect.centerx, rect.centery)
+                
+                if rect.collidepoint(mouse_pos) and not self.is_dragging_item:
+                    hovered_item_desc = f"{data.get('name','')}: {data.get('desc','')}"
+
+        if hovered_item_desc:
+            tip_font = pygame.font.SysFont("Arial", 13, bold=True)
+            tip_surf = tip_font.render(hovered_item_desc, True, (245, 245, 255))
+            tip_box = pygame.Rect(mouse_pos[0] + 15, mouse_pos[1] - 30, tip_surf.get_width() + 16, 26)
+            pygame.draw.rect(surface, (12, 16, 25, 235), tip_box, border_radius=8)
+            pygame.draw.rect(surface, GOLD, tip_box, width=1, border_radius=8)
+            surface.blit(tip_surf, (tip_box.x + 8, tip_box.y + 6))
+
+        # --- DRAG & DROP OGGETTI FEEDBACK ---
+        if self.is_dragging_item and self.dragged_item_key:
+            data = get_item_data(self.dragged_item_key)
+            drect = pygame.Rect(mouse_pos[0] - 22, mouse_pos[1] - 22, 44, 44)
+            pygame.draw.rect(surface, data.get("color", (100, 100, 100)), drect, border_radius=10)
+            pygame.draw.rect(surface, WHITE, drect, width=2, border_radius=10)
+            tag_text = data.get("tag", "ITM")
+            draw_text(tag_text, pygame.font.SysFont("Arial", 14, bold=True), WHITE, surface, drect.centerx, drect.centery)
+
+        # --- DRAG & DROP CAMPIONI FEEDBACK ---
         if self.is_dragging and self.dragged_champ:
-            # Disegniamo un cerchio sotto il mouse mentre trasciniamo
-            pygame.draw.circle(surface, self.dragged_champ.color, mouse_pos, 40)
-            pygame.draw.circle(surface, WHITE, mouse_pos, 40, width=2)
+            drag_token = self.dragged_champ.get_token_surface(size=64)
+            surface.blit(drag_token, (mouse_pos[0] - 32, mouse_pos[1] - 32))
+            tier_color = getattr(self.dragged_champ, 'tier_color', WHITE)
+            pygame.draw.circle(surface, tier_color, mouse_pos, 34, width=3)
+            pygame.draw.circle(surface, (255, 255, 255), mouse_pos, 36, width=1)
