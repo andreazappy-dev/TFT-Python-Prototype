@@ -259,6 +259,13 @@ class BotPlayer:
                 used_slots.add(assigned_slot)
                 champ.board_index = assigned_slot
 
+    def take_damage(self, dmg):
+        """Applica danno alla vita del bot e verifica eventuale eliminazione"""
+        self.hp = max(0, self.hp - dmg)
+        if self.hp == 0:
+            self.is_alive = False
+        return not self.is_alive
+
 
 class LobbyManager:
     """
