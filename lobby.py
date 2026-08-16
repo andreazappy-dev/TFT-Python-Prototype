@@ -247,29 +247,32 @@ class LobbyManager:
         
         return all_players
 
-    def draw_leaderboard_sidebar(self, surface, mouse_pos, start_x=1230, start_y=75):
+    def draw_leaderboard_sidebar(self, surface, mouse_pos, start_x=None, start_y=14):
         """
         Disegna la colonna della classifica a destra con barre HP dinamiche, nomi, streak e tooltip all'hover.
         """
         players = self.get_leaderboard()
         
-        card_w = 156
-        card_h = 42
-        spacing = 5
+        card_w = 195
+        card_h = 34
+        spacing = 4
+        px = start_x if start_x is not None else (surface.get_width() - card_w - 20)
         
         # Header Classifica
-        head_rect = pygame.Rect(start_x, start_y, card_w, 24)
+        head_rect = pygame.Rect(px, start_y, card_w, 24)
         head_surf = pygame.Surface((card_w, 24), pygame.SRCALPHA)
-        pygame.draw.rect(head_surf, (14, 18, 28, 220), (0, 0, card_w, 24), border_radius=12)
+        pygame.draw.rect(head_surf, (14, 18, 28, 230), (0, 0, card_w, 24), border_radius=12)
         pygame.draw.rect(head_surf, (200, 170, 75, 180), (0, 0, card_w, 24), width=1, border_radius=12)
-        surface.blit(head_surf, (start_x, start_y))
-        draw_text("CLASSIFICA LOBBY", pygame.font.SysFont("Arial", 11, bold=True), (245, 225, 170), surface, head_rect.centerx, head_rect.centery)
+        surface.blit(head_surf, (px, start_y))
+        head_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 11, bold=True)
+        draw_text("CLASSIFICA LOBBY", head_font, (245, 225, 170), surface, head_rect.centerx, head_rect.centery)
 
         hovered_player = None
         current_y = start_y + 28
+        row_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 10, bold=True)
 
         for rank, p in enumerate(players, start=1):
-            rect = pygame.Rect(start_x, current_y, card_w, card_h)
+            rect = pygame.Rect(px, current_y, card_w, card_h)
             is_hover = rect.collidepoint(mouse_pos)
             if is_hover and not p["is_human"] and p["is_alive"]:
                 hovered_player = p
@@ -291,25 +294,25 @@ class LobbyManager:
                 border_col = (45, 45, 55, 100)
                 border_w = 1
 
-            pygame.draw.rect(card_surf, bg_col, (0, 0, card_w, card_h), border_radius=10)
-            pygame.draw.rect(card_surf, border_col, (0, 0, card_w, card_h), width=border_w, border_radius=10)
-            surface.blit(card_surf, (start_x, current_y))
+            pygame.draw.rect(card_surf, bg_col, (0, 0, card_w, card_h), border_radius=8)
+            pygame.draw.rect(card_surf, border_col, (0, 0, card_w, card_h), width=border_w, border_radius=8)
+            surface.blit(card_surf, (px, current_y))
             
             # 1. Badge Posizione (#1 - #8)
             rank_col = GOLD if rank == 1 else ((215, 225, 235) if rank == 2 else ((205, 140, 80) if rank == 3 else (140, 150, 165)))
-            draw_text(f"#{rank}", pygame.font.SysFont("Arial", 12, bold=True), rank_col, surface, start_x + 14, current_y + 13)
+            draw_text(f"#{rank}", row_font, rank_col, surface, px + 12, current_y + card_h // 2)
             
             # 2. Nome Giocatore / Bot
             name_col = (80, 220, 255) if p["is_human"] else (WHITE if p["is_alive"] else (110, 115, 125))
-            draw_text(p["name"][:13], pygame.font.SysFont("Arial", 11, bold=True), name_col, surface, start_x + 32, current_y + 6, center=False)
+            draw_text(p["name"][:11], row_font, name_col, surface, px + 26, current_y + 4, center=False)
             
             if p["is_alive"]:
                 # 3. Barra Vita Mini
                 hp_pct = max(0.0, min(1.0, p["hp"] / 100.0))
-                bar_x = start_x + 32
-                bar_y = current_y + 22
-                bar_w = 80
-                bar_h = 8
+                bar_x = px + 26
+                bar_y = current_y + 19
+                bar_w = 110
+                bar_h = 7
                 
                 # Colore barra HP
                 if hp_pct > 0.5:
@@ -319,23 +322,22 @@ class LobbyManager:
                 else:
                     hp_col = (235, 60, 60)
                     
-                pygame.draw.rect(surface, (20, 24, 32), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
+                pygame.draw.rect(surface, (20, 24, 32), (bar_x, bar_y, bar_w, bar_h), border_radius=3)
                 if hp_pct > 0:
-                    pygame.draw.rect(surface, hp_col, (bar_x, bar_y, int(bar_w * hp_pct), bar_h), border_radius=4)
-                pygame.draw.rect(surface, (0, 0, 0, 140), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=4)
+                    pygame.draw.rect(surface, hp_col, (bar_x, bar_y, int(bar_w * hp_pct), bar_h), border_radius=3)
+                pygame.draw.rect(surface, (0, 0, 0, 140), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=3)
                 
                 # Testo HP
-                draw_text(f"{p['hp']}", pygame.font.SysFont("Arial", 10, bold=True), WHITE, surface, start_x + card_w - 20, current_y + 26)
+                draw_text(f"{p['hp']}", row_font, WHITE, surface, px + card_w - 20, current_y + 22)
                 
                 # Streak indicator
-                streak_val = p["streak"]
-                if streak_val >= 2:
-                    draw_text(f"+{streak_val}", pygame.font.SysFont("Arial", 9, bold=True), (255, 160, 50), surface, start_x + card_w - 18, current_y + 11)
-                elif streak_val <= -2:
-                    draw_text(f"{streak_val}", pygame.font.SysFont("Arial", 9, bold=True), (140, 160, 220), surface, start_x + card_w - 18, current_y + 11)
+                streak = p["streak"]
+                if streak >= 2:
+                    draw_text(f"+{streak}", row_font, (100, 230, 255), surface, px + card_w - 20, current_y + 8)
+                elif streak <= -2:
+                    draw_text(f"{streak}", row_font, (220, 150, 60), surface, px + card_w - 20, current_y + 8)
             else:
-                # Testo eliminato
-                draw_text(f"ELIMINATO", pygame.font.SysFont("Arial", 10, bold=True), (180, 70, 70), surface, start_x + 32, current_y + 22, center=False)
+                draw_text("ELIMINATO", row_font, (120, 120, 130), surface, px + 80, current_y + card_h // 2)
 
             current_y += card_h + spacing
 

@@ -143,13 +143,20 @@ def calculate_team_traits(champions_list, bonus_traits=None):
         count = trait_counts.get(trait_name, 0)
         breakpoints = data["breakpoints"]
         
-        # Trova la soglia raggiunta più alta
+        # Trova la soglia attiva raggiunta e la prossima soglia da sbloccare
         active_tier = 0
         active_req = 0
+        next_req = None
+        
         for bp in breakpoints:
             if count >= bp:
                 active_tier += 1
                 active_req = bp
+            elif next_req is None:
+                next_req = bp
+                
+        if next_req is None:
+            next_req = breakpoints[-1] # Raggiunta soglia massima
 
         is_active = count >= breakpoints[0] and count > 0
         
@@ -159,6 +166,7 @@ def calculate_team_traits(champions_list, bonus_traits=None):
                 "name": trait_name,
                 "count": count,
                 "req": active_req if is_active else breakpoints[0],
+                "next_req": next_req,
                 "tier": active_tier,
                 "active": is_active,
                 "data": data
@@ -302,7 +310,7 @@ def apply_trait_buffs(team, active_traits_info):
             champ.base_attack += 35
             champ.spell_power_mult = getattr(champ, "spell_power_mult", 1.0) * 1.35
 
-def draw_traits_sidebar(surface, traits_list, start_x=15, start_y=130):
+def draw_traits_sidebar(surface, traits_list, start_x=20, start_y=54):
     """
     Disegna il pannello HUD laterale a sinistra con tutti i tratti attivi e il loro progresso (Stile Moderno TFT).
     """
@@ -310,36 +318,35 @@ def draw_traits_sidebar(surface, traits_list, start_x=15, start_y=130):
         return
 
     # Header del pannello
-    title_font = pygame.font.SysFont("Arial", 14, bold=True)
-    badge_font = pygame.font.SysFont("Arial", 13, bold=True)
-    sub_font = pygame.font.SysFont("Arial", 11, bold=True)
+    title_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 13, bold=True)
+    badge_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 12, bold=True)
+    sub_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 11, bold=True)
 
-    panel_w = 180
-    badge_h = 44
-    spacing = 7
+    panel_w = 195
+    badge_h = 42
+    spacing = 6
     
-    # Contenitore vetrato del pannello intero
-    total_h = min(280, 24 + len(traits_list[:6]) * (badge_h + spacing))
-    panel_rect = pygame.Rect(start_x - 5, start_y - 28, panel_w + 10, total_h)
+    # Mostra fino alle prime 6 sinergie
+    shown_traits = traits_list[:6]
+    total_h = 28 + len(shown_traits) * (badge_h + spacing)
+    panel_rect = pygame.Rect(start_x, start_y, panel_w, total_h)
     
     panel_surf = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
-    pygame.draw.rect(panel_surf, (15, 20, 32, 220), (0, 0, panel_rect.width, panel_rect.height), border_radius=12)
+    pygame.draw.rect(panel_surf, (15, 20, 32, 230), (0, 0, panel_rect.width, panel_rect.height), border_radius=12)
     pygame.draw.rect(panel_surf, (180, 160, 60, 180), (0, 0, panel_rect.width, panel_rect.height), width=1, border_radius=12)
     surface.blit(panel_surf, (panel_rect.x, panel_rect.y))
 
     # Titolo
-    draw_text("SINERGIE ATTIVE", title_font, (240, 200, 60), surface, panel_rect.centerx, start_y - 14)
+    draw_text("SINERGIE SQUADRA", title_font, (240, 200, 60), surface, panel_rect.centerx, start_y + 14)
 
-    curr_y = start_y + 2
-    for t in traits_list[:6]: # Mostra fino alle prime 6 sinergie
+    curr_y = start_y + 26
+    for t in shown_traits:
         name = t["name"]
         count = t["count"]
-        req = t["req"]
+        next_req = t.get("next_req", t["req"])
         is_active = t["active"]
         data = t["data"]
         trait_color = data["color"]
-        
-        box_rect = pygame.Rect(start_x, curr_y, panel_w, badge_h)
         
         # Colore sfondo card
         if is_active:
@@ -351,29 +358,34 @@ def draw_traits_sidebar(surface, traits_list, start_x=15, start_y=130):
             border_color = (60, 70, 85, 150)
             border_w = 1
 
-        card_surf = pygame.Surface((panel_w, badge_h), pygame.SRCALPHA)
-        pygame.draw.rect(card_surf, bg_color, (0, 0, panel_w, badge_h), border_radius=8)
-        pygame.draw.rect(card_surf, border_color, (0, 0, panel_w, badge_h), width=border_w, border_radius=8)
-        surface.blit(card_surf, (start_x, curr_y))
+        card_surf = pygame.Surface((panel_w - 12, badge_h), pygame.SRCALPHA)
+        pygame.draw.rect(card_surf, bg_color, (0, 0, panel_w - 12, badge_h), border_radius=8)
+        pygame.draw.rect(card_surf, border_color, (0, 0, panel_w - 12, badge_h), width=border_w, border_radius=8)
+        surface.blit(card_surf, (start_x + 6, curr_y))
 
-        # Icona esagonale / Cerchio per il conteggio
-        icon_cx = start_x + 22
+        # Icona circolare per il conteggio
+        icon_cx = start_x + 24
         icon_cy = curr_y + badge_h // 2
         icon_col = trait_color if is_active else (80, 90, 110)
         
-        pygame.draw.circle(surface, (10, 14, 20), (icon_cx, icon_cy), 15)
-        pygame.draw.circle(surface, icon_col, (icon_cx, icon_cy), 15, width=2)
+        pygame.draw.circle(surface, (10, 14, 20), (icon_cx, icon_cy), 13)
+        pygame.draw.circle(surface, icon_col, (icon_cx, icon_cy), 13, width=2)
         draw_text(f"{count}", badge_font, (255, 255, 255) if is_active else (150, 160, 175), surface, icon_cx, icon_cy)
 
         # Nome del tratto
         name_color = (255, 255, 255) if is_active else (150, 160, 175)
         name_surf = badge_font.render(name, True, name_color)
-        surface.blit(name_surf, (start_x + 44, curr_y + 6))
+        surface.blit(name_surf, (start_x + 44, curr_y + 4))
 
-        # Barra / Soglia progresso
-        breakpoints_str = " / ".join(str(bp) for bp in data["breakpoints"])
-        status_text = f"({breakpoints_str})"
+        # Progresso esatto: es. "1/2" se inattivo, "2/4" se attivo a tier 1, "4/4" se max tier!
+        breakpoints_str = "/".join(str(bp) for bp in data["breakpoints"])
+        progress_text = f"{count}/{next_req}"
+        if len(data["breakpoints"]) > 1:
+            tier_info = f"{progress_text}  [{breakpoints_str}]"
+        else:
+            tier_info = f"{progress_text}"
+            
         status_color = trait_color if is_active else (110, 125, 145)
-        draw_text(status_text, sub_font, status_color, surface, start_x + 44 + name_surf.get_width() // 2 + 10, curr_y + 26)
+        draw_text(tier_info, sub_font, status_color, surface, start_x + 44, curr_y + 24, center=False)
 
         curr_y += badge_h + spacing

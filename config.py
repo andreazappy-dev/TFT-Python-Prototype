@@ -19,14 +19,17 @@ GREEN = (60, 200, 100)
 RED = (220, 55, 65)
 GOLD = (240, 195, 40)
 
-# --- Font Ottimizzati per 1920x1080 ---
-TITLE_FONT = pygame.font.SysFont("Arial", 52, bold=True)
-SUBTITLE_FONT = pygame.font.SysFont("Arial", 26, bold=True)
-HEADER_FONT = pygame.font.SysFont("Arial", 20, bold=True)
-BUTTON_FONT = pygame.font.SysFont("Arial", 18, bold=True)
-TEXT_FONT = pygame.font.SysFont("Arial", 15, bold=True)
-SMALL_FONT = pygame.font.SysFont("Arial", 13, bold=True)
-MICRO_FONT = pygame.font.SysFont("Arial", 11, bold=True)
+# --- Font Ottimizzati ad Alta Definizione (Helvetica Neue / Arial) ---
+def get_font(size, bold=True):
+    return pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], size, bold=bold)
+
+TITLE_FONT = get_font(38, bold=True)
+SUBTITLE_FONT = get_font(22, bold=True)
+HEADER_FONT = get_font(16, bold=True)
+BUTTON_FONT = get_font(14, bold=True)
+TEXT_FONT = get_font(13, bold=True)
+SMALL_FONT = get_font(11, bold=True)
+MICRO_FONT = get_font(10, bold=True)
 
 # --- Funzioni Helper Grafiche ---
 def draw_text(text, font, color, surface, x, y, center=True):

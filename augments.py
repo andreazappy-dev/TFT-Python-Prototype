@@ -272,18 +272,19 @@ def draw_augment_selection_screen(surface, mouse_pos, offered_augments, can_rero
     
     return card_rects, button_rects, reroll_rect
 
-def draw_hud_augments(surface, mouse_pos, player_augments, start_x=12, start_y=38):
+def draw_hud_augments(surface, mouse_pos, player_augments, start_x=20, start_y=14):
     """
     Disegna fino a 3 stemmi esagonali/arrotondati degli Augments posseduti dal giocatore,
-    con tooltip all'hover.
+    con tooltip all'hover. Posizionato in alto a sinistra sopra le sinergie.
     """
     if not player_augments:
         return
         
-    badge_w = 48
+    badge_w = 58
     badge_h = 32
     spacing = 8
     
+    tag_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 11, bold=True)
     hovered_aug = None
     for i, aug_id in enumerate(player_augments[:3]):
         aug = AUGMENTS_DATABASE.get(aug_id)
@@ -299,10 +300,10 @@ def draw_hud_augments(surface, mouse_pos, player_augments, start_x=12, start_y=3
             hovered_aug = aug
             
         tier_col = aug.get("color", TIER_SILVER)
-        pygame.draw.rect(surface, (14, 18, 28, 230), rect, border_radius=8)
+        pygame.draw.rect(surface, (14, 18, 28, 240), rect, border_radius=8)
         pygame.draw.rect(surface, tier_col, rect, width=2 if is_hover else 1, border_radius=8)
         
-        draw_text(aug["tag"][:4], MICRO_FONT, tier_col, surface, rect.centerx, rect.centery)
+        draw_text(aug["tag"][:5], tag_font, tier_col, surface, rect.centerx, rect.centery)
         
     # Tooltip all'hover
     if hovered_aug:

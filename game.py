@@ -23,7 +23,7 @@ from damage_meter import DamageMeter
 # --- Inizializzazione Audio ---
 audio_manager = AudioManager.get_instance()
 
-# --- Inizializzazione Pygame & Display Scaling Dinamico ---
+# --- Inizializzazione Pygame & Display Responsive Nativo ---
 pygame.init()
 
 # Rilevamento risoluzione display reale del monitor (Mac / Windows / Linux)
@@ -31,21 +31,10 @@ _info = pygame.display.Info()
 _mon_w = _info.current_w if _info.current_w > 0 else WIDTH
 _mon_h = _info.current_h if _info.current_h > 0 else HEIGHT
 
-# All'avvio occupa l'intero spazio del monitor mantenendo la finestra ridimensionabile
+# All'avvio occupa l'intero spazio del monitor nativamente mantenendo la finestra ridimensionabile
 SCREEN_FLAGS = pygame.RESIZABLE
 DISPLAY_SCREEN = pygame.display.set_mode((_mon_w, _mon_h), SCREEN_FLAGS)
 pygame.display.set_caption("Mini TFT - 8-Player Lobby Battle Royale")
-
-# Hook trasparente per pygame.mouse.get_pos (mappatura automatica su canvas virtuale 1920x1080)
-_orig_pygame_mouse_get_pos = pygame.mouse.get_pos
-
-def _hooked_mouse_get_pos():
-    pos = _orig_pygame_mouse_get_pos()
-    if Game._instance is not None:
-        return Game._instance.to_virtual_pos(pos)
-    return pos
-
-pygame.mouse.get_pos = _hooked_mouse_get_pos
 
 
 # --- CLASSE PRINCIPALE DEL GIOCO ---
@@ -54,15 +43,10 @@ class Game:
     """
     Classe principale che gestisce il ciclo di gioco, gli stati,
     l'economia e orchestra Shop, Battaglia e Lobby 8 Giocatori.
-    Supporta Virtual Resolution Canvas Scaling su qualsiasi schermo.
+    Supporta risoluzione nativa e adattamento responsive a qualsiasi schermo.
     """
-    _instance = None
-
     def __init__(self):
-        Game._instance = self
-        self.display_screen = DISPLAY_SCREEN
-        self.virtual_screen = pygame.Surface((WIDTH, HEIGHT))
-        self.screen = self.virtual_screen # Consente il rendering trasparente 1920x1080 in tutti i moduli
+        self.screen = DISPLAY_SCREEN
         self.clock = pygame.time.Clock()
         self.running = True
         self.is_fullscreen = False
@@ -118,44 +102,23 @@ class Game:
         # Variabile per tenere traccia del vincitore dell'ultima battaglia
         self.last_battle_winner = None
         self.last_round_stats = {}
-        self.play_button_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 10, 240, 64)
-        self.continue_button_rect = pygame.Rect(WIDTH // 2 - 140, HEIGHT // 2 + 135, 280, 52)
+        self.play_button_rect = pygame.Rect(0, 0, 0, 0)
+        self.continue_button_rect = pygame.Rect(0, 0, 0, 0)
         self.audio.play_music("shop_theme")
-
-    def get_scale_and_offset(self):
-        """ Calcola il fattore di scala uniforme e i margini di centratura (Letterbox/Pillarbox) """
-        dw, dh = self.display_screen.get_size()
-        scale = min(dw / WIDTH, dh / HEIGHT)
-        scaled_w = int(WIDTH * scale)
-        scaled_h = int(HEIGHT * scale)
-        offset_x = (dw - scaled_w) // 2
-        offset_y = (dh - scaled_h) // 2
-        return scale, offset_x, offset_y, scaled_w, scaled_h
-
-    def to_virtual_pos(self, physical_pos):
-        """ Converte coordinate pixel dello schermo fisico in coordinate virtuali 1920x1080 """
-        scale, offset_x, offset_y, _, _ = self.get_scale_and_offset()
-        if scale <= 0:
-            return physical_pos
-        vx = int((physical_pos[0] - offset_x) / scale)
-        vy = int((physical_pos[1] - offset_y) / scale)
-        vx = max(0, min(WIDTH - 1, vx))
-        vy = max(0, min(HEIGHT - 1, vy))
-        return (vx, vy)
 
     def toggle_fullscreen(self):
         """ Alterna tra Schermo Intero reale e Finestra Massimizzata """
         self.is_fullscreen = not self.is_fullscreen
         if self.is_fullscreen:
-            self.display_screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
             info = pygame.display.Info()
             w = max(1280, int(info.current_w * 0.95))
             h = max(720, int(info.current_h * 0.95))
-            self.display_screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
+            self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
 
     def run(self):
-        """ Il loop di gioco principale, con Virtual Canvas Scaling e resa grafica fluida a 60 FPS. """
+        """ Il loop di gioco principale, con resa grafica nativa ultra-nitida a 60 FPS. """
         while self.running:
             # 1. Gestisci Eventi
             events = pygame.event.get()
@@ -163,22 +126,12 @@ class Game:
                 if event.type == pygame.QUIT:
                     self.running = False
                 elif event.type == pygame.VIDEORESIZE:
-                    self.display_screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    self.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_m:
                         self.audio.toggle_mute()
                     elif event.key in [pygame.K_F11, pygame.K_f]:
                         self.toggle_fullscreen()
-                    
-                # Converti coordinate fisiche del mouse in coordinate virtuali 1920x1080
-                if hasattr(event, 'pos'):
-                    vpos = self.to_virtual_pos(event.pos)
-                    try:
-                        event.pos = vpos
-                    except Exception:
-                        pass
-                    if hasattr(event, 'dict') and 'pos' in event.dict:
-                        event.dict['pos'] = vpos
 
                 if self.game_state == "MAIN_MENU":
                     self.handle_menu_events(event)
@@ -201,42 +154,33 @@ class Game:
                 if self.battle_manager.is_over:
                     self.end_battle(self.battle_manager.winner)
 
-            # 3. Disegna sulla Virtual Canvas (1920x1080)
-            self.virtual_screen.fill((10, 14, 22))
+            # 3. Disegna Direttamente sul Display Nativo (Zero Sgranamento)
+            self.screen.fill((10, 14, 22))
             
             if self.game_state == "MAIN_MENU":
                 self.audio.play_music("shop_theme")
                 self.draw_main_menu()
             elif self.game_state == "CAROUSEL" and self.carousel_manager:
                 self.audio.play_music("shop_theme")
-                self.carousel_manager.draw(self.virtual_screen)
+                self.carousel_manager.draw(self.screen)
             elif self.game_state == "AUGMENT_SELECTION":
                 self.audio.play_music("shop_theme")
                 self.draw_augment_selection()
             elif self.game_state == "SHOP":
                 self.audio.play_music("shop_theme")
-                self.shop_manager.draw(self.virtual_screen)
+                self.shop_manager.draw(self.screen)
             elif self.game_state == "BATTLE" and self.battle_manager:
                 self.audio.play_music("battle_theme")
-                self.battle_manager.draw(self.virtual_screen)
+                self.battle_manager.draw(self.screen)
             elif self.game_state == "RESULT":
                 self.draw_result_screen()
                 
-            # Indicatore Audio & Schermo Intero in alto
+            # Indicatore Audio & Schermo Intero in alto a destra
+            sw = self.screen.get_width()
             audio_status = "MUTATO (M)" if self.audio.is_muted else "ATTIVO (M)"
             audio_color = (255, 100, 100) if self.audio.is_muted else (120, 220, 120)
-            draw_text(f"AUDIO: {audio_status}  |  SCHERMO INTERO: [F11/F]", SMALL_FONT, audio_color, self.virtual_screen, WIDTH - 180, 18)
+            draw_text(f"AUDIO: {audio_status}  |  SCHERMO INTERO: [F11/F]", SMALL_FONT, audio_color, self.screen, sw - 140, 18)
             
-            # 4. Smoothscale & Presentazione sullo schermo reale
-            scale, offset_x, offset_y, scaled_w, scaled_h = self.get_scale_and_offset()
-            self.display_screen.fill((5, 7, 12))
-            
-            if scaled_w == WIDTH and scaled_h == HEIGHT and offset_x == 0 and offset_y == 0:
-                self.display_screen.blit(self.virtual_screen, (0, 0))
-            else:
-                scaled_surf = pygame.transform.smoothscale(self.virtual_screen, (scaled_w, scaled_h))
-                self.display_screen.blit(scaled_surf, (offset_x, offset_y))
-
             pygame.display.flip()
             self.clock.tick(60)
         
@@ -245,50 +189,52 @@ class Game:
 
     # --- Gestione Stato: MAIN_MENU ---
     def draw_main_menu(self):
+        sw = self.screen.get_width()
+        sh = self.screen.get_height()
+        
         # 1. Background Cinematico AI
-        bg_surf = get_background_image("menu_bg", WIDTH, HEIGHT)
+        bg_surf = get_background_image("menu_bg", sw, sh)
         self.screen.blit(bg_surf, (0, 0))
         
         # Vignette scura per contrasto
-        vignette = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        vignette = pygame.Surface((sw, sh), pygame.SRCALPHA)
         vignette.fill((10, 12, 20, 130))
         self.screen.blit(vignette, (0, 0))
         
         # 2. Pannello Centrale Glassmorphism
-        center_panel = pygame.Rect(WIDTH // 2 - 260, HEIGHT // 2 - 200, 520, 390)
+        center_panel = pygame.Rect(sw // 2 - 240, sh // 2 - 180, 480, 360)
         draw_glass_panel(self.screen, center_panel, border_radius=24, bg_color=(12, 16, 26, 215), border_color=(210, 175, 75, 200), border_width=2)
         
         # 3. Titolo con Bagliore Aureo
-        draw_text("MINI TFT", TITLE_FONT, (0, 0, 0), self.screen, WIDTH // 2 + 3, HEIGHT // 2 - 130 + 3)
-        draw_text("MINI TFT", TITLE_FONT, (255, 200, 40), self.screen, WIDTH // 2 + 1, HEIGHT // 2 - 130 + 1)
-        draw_text("MINI TFT", TITLE_FONT, (255, 240, 180), self.screen, WIDTH // 2, HEIGHT // 2 - 130)
+        draw_text("MINI TFT", TITLE_FONT, (0, 0, 0), self.screen, sw // 2 + 2, sh // 2 - 110 + 2)
+        draw_text("MINI TFT", TITLE_FONT, (255, 200, 40), self.screen, sw // 2 + 1, sh // 2 - 110 + 1)
+        draw_text("MINI TFT", TITLE_FONT, (255, 240, 180), self.screen, sw // 2, sh // 2 - 110)
         
-        sub_font = pygame.font.SysFont("Arial", 16, bold=True)
-        draw_text("TACTICAL AUTO-BATTLER - PROTOTYPE", sub_font, (170, 200, 240), self.screen, WIDTH // 2, HEIGHT // 2 - 65)
-        draw_text("by andreazappy-dev", TEXT_FONT, (140, 150, 170), self.screen, WIDTH // 2, HEIGHT // 2 - 35)
+        sub_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 14, bold=True)
+        draw_text("TACTICAL AUTO-BATTLER - PROTOTYPE", sub_font, (170, 200, 240), self.screen, sw // 2, sh // 2 - 55)
+        draw_text("by andreazappy-dev", TEXT_FONT, (140, 150, 170), self.screen, sw // 2, sh // 2 - 28)
 
         # 4. Bottone GIOCA Curvo & Luminoso
-        self.play_button_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 10, 240, 64)
+        self.play_button_rect = pygame.Rect(sw // 2 - 110, sh // 2 + 15, 220, 56)
         mouse_pos = pygame.mouse.get_pos()
         is_hover = self.play_button_rect.collidepoint(mouse_pos)
         
         btn_color = (45, 150, 255) if is_hover else (30, 110, 210)
         border_glow = (255, 230, 100) if is_hover else (120, 190, 255)
         
-        # Glow all'hover
         if is_hover:
-            glow_rect = self.play_button_rect.inflate(8, 8)
-            pygame.draw.rect(self.screen, (60, 160, 255, 100), glow_rect, border_radius=34)
+            glow_rect = self.play_button_rect.inflate(6, 6)
+            pygame.draw.rect(self.screen, (60, 160, 255, 100), glow_rect, border_radius=30)
             
-        pygame.draw.rect(self.screen, btn_color, self.play_button_rect, border_radius=32)
-        pygame.draw.rect(self.screen, border_glow, self.play_button_rect, width=2, border_radius=32)
-        draw_text("GIOCA", HEADER_FONT, WHITE, self.screen, WIDTH // 2, HEIGHT // 2 + 42)
+        pygame.draw.rect(self.screen, btn_color, self.play_button_rect, border_radius=28)
+        pygame.draw.rect(self.screen, border_glow, self.play_button_rect, width=2, border_radius=28)
+        draw_text("GIOCA", HEADER_FONT, WHITE, self.screen, sw // 2, sh // 2 + 43)
         
         # 5. Pillola Comandi Rapidi in basso
-        tip_rect = pygame.Rect(WIDTH // 2 - 350, HEIGHT - 65, 700, 36)
-        draw_glass_panel(self.screen, tip_rect, border_radius=18, bg_color=(15, 18, 25, 200), border_color=(80, 100, 130, 150), border_width=1)
-        tip_font = pygame.font.SysFont("Arial", 12, bold=True)
-        draw_text("[M] Muto Audio   |   [Click SX] Schiera / Compra   |   [Click DX] Scheda Info", tip_font, (210, 220, 240), self.screen, WIDTH // 2, HEIGHT - 47)
+        tip_rect = pygame.Rect(sw // 2 - 300, sh - 55, 600, 32)
+        draw_glass_panel(self.screen, tip_rect, border_radius=16, bg_color=(15, 18, 25, 200), border_color=(80, 100, 130, 150), border_width=1)
+        tip_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 11, bold=True)
+        draw_text("[M] Muto Audio   |   [Click SX] Schiera / Compra   |   [Click DX] Scheda Info", tip_font, (210, 220, 240), self.screen, sw // 2, sh - 39)
 
     def handle_menu_events(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -456,18 +402,20 @@ class Game:
 
     # --- Gestione Stato: RESULT ---
     def draw_result_screen(self):
+        sw = self.screen.get_width()
+        sh = self.screen.get_height()
         is_win = self.last_battle_winner == "player"
         bg_name = "victory_bg" if (is_win or (self.is_game_finished and self.player_placement == 1)) else "defeat_bg"
-        bg_surf = get_background_image(bg_name, WIDTH, HEIGHT)
+        bg_surf = get_background_image(bg_name, sw, sh)
         self.screen.blit(bg_surf, (0, 0))
         
         # Vignette scura
-        vignette = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        vignette = pygame.Surface((sw, sh), pygame.SRCALPHA)
         vignette.fill((10, 12, 18, 140))
         self.screen.blit(vignette, (0, 0))
         
         # Card Risultati Centrale
-        card_rect = pygame.Rect(WIDTH // 2 - 260, HEIGHT // 2 - 230, 520, 460)
+        card_rect = pygame.Rect(sw // 2 - 250, sh // 2 - 210, 500, 420)
         border_col = (230, 190, 70, 220) if is_win else (210, 60, 60, 220)
         draw_glass_panel(self.screen, card_rect, border_radius=24, bg_color=(14, 18, 28, 230), border_color=border_col, border_width=2)
         
@@ -483,49 +431,49 @@ class Game:
             title_text = "VITTORIA!" if is_win else "SCONFITTA..."
             title_col = (255, 220, 60) if is_win else (240, 80, 80)
             
-        draw_text(title_text, TITLE_FONT, (0,0,0), self.screen, WIDTH // 2 + 2, HEIGHT // 2 - 165 + 2)
-        draw_text(title_text, TITLE_FONT, title_col, self.screen, WIDTH // 2, HEIGHT // 2 - 165)
+        draw_text(title_text, TITLE_FONT, (0,0,0), self.screen, sw // 2 + 2, sh // 2 - 150 + 2)
+        draw_text(title_text, TITLE_FONT, title_col, self.screen, sw // 2, sh // 2 - 150)
         
         round_idx = self.last_round_stats.get("round", self.round_number - 1)
         opp_name = self.last_round_stats.get("opponent", "Avversario")
-        sub_font = pygame.font.SysFont("Arial", 14, bold=True)
-        draw_text(f"ROUND {round_idx} - VS {opp_name.upper()}", sub_font, (180, 200, 230), self.screen, WIDTH // 2, HEIGHT // 2 - 110)
+        sub_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 13, bold=True)
+        draw_text(f"ROUND {round_idx} - VS {opp_name.upper()}", sub_font, (180, 200, 230), self.screen, sw // 2, sh // 2 - 100)
         
         # Statistiche Round
-        stats_y = HEIGHT // 2 - 75
+        stats_y = sh // 2 - 70
         gold_earned = self.last_round_stats.get("gold", 5)
         int_earned = self.last_round_stats.get("interest", 0)
         strk_earned = self.last_round_stats.get("streak", 0)
         
         # Box statistiche interno
-        stat_box = pygame.Rect(WIDTH // 2 - 220, stats_y, 440, 180)
+        stat_box = pygame.Rect(sw // 2 - 210, stats_y, 420, 160)
         draw_glass_panel(self.screen, stat_box, border_radius=14, bg_color=(20, 26, 40, 180), border_color=(60, 75, 100, 150), border_width=1)
         
-        row_font = pygame.font.SysFont("Arial", 14, bold=True)
-        draw_text("Oro Guadagnato:", row_font, (220, 220, 230), self.screen, WIDTH // 2 - 95, stats_y + 28)
-        draw_text(f"+{gold_earned}g  (Int: +{int_earned}g, Serie: +{strk_earned}g)", row_font, GOLD, self.screen, WIDTH // 2 + 95, stats_y + 28)
+        row_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 13, bold=True)
+        draw_text("Oro Guadagnato:", row_font, (220, 220, 230), self.screen, sw // 2 - 90, stats_y + 24)
+        draw_text(f"+{gold_earned}g  (Int: +{int_earned}g, Serie: +{strk_earned}g)", row_font, GOLD, self.screen, sw // 2 + 90, stats_y + 24)
         
         hp_lost = self.last_round_stats.get("damage", 0)
         hp_text = f"{self.player_hp} HP  (-{hp_lost})" if hp_lost > 0 else f"{self.player_hp} HP (Nessun Danno)"
-        draw_text("Vita Giocatore:", row_font, (220, 220, 230), self.screen, WIDTH // 2 - 95, stats_y + 68)
-        draw_text(hp_text, row_font, (80, 220, 120) if hp_lost == 0 else (240, 90, 90), self.screen, WIDTH // 2 + 95, stats_y + 68)
+        draw_text("Vita Giocatore:", row_font, (220, 220, 230), self.screen, sw // 2 - 90, stats_y + 60)
+        draw_text(hp_text, row_font, (80, 220, 120) if hp_lost == 0 else (240, 90, 90), self.screen, sw // 2 + 90, stats_y + 60)
         
-        draw_text("Livello Giocatore:", row_font, (220, 220, 230), self.screen, WIDTH // 2 - 95, stats_y + 108)
-        draw_text(f"Lvl {self.player_level} ({self.player_xp}/{self.xp_to_level.get(self.player_level, 999)} XP)", row_font, (90, 180, 255), self.screen, WIDTH // 2 + 95, stats_y + 108)
+        draw_text("Livello Giocatore:", row_font, (220, 220, 230), self.screen, sw // 2 - 90, stats_y + 96)
+        draw_text(f"Lvl {self.player_level} ({self.player_xp}/{self.xp_to_level.get(self.player_level, 999)} XP)", row_font, (90, 180, 255), self.screen, sw // 2 + 90, stats_y + 96)
         
-        draw_text("Oro in Banca:", row_font, (220, 220, 230), self.screen, WIDTH // 2 - 95, stats_y + 148)
-        draw_text(f"{self.player_gold}g", row_font, GOLD, self.screen, WIDTH // 2 + 95, stats_y + 148)
+        draw_text("Oro in Banca:", row_font, (220, 220, 230), self.screen, sw // 2 - 90, stats_y + 132)
+        draw_text(f"{self.player_gold}g", row_font, GOLD, self.screen, sw // 2 + 90, stats_y + 132)
 
         # Bottone Continua / Torna al Menu
-        self.continue_button_rect = pygame.Rect(WIDTH // 2 - 140, HEIGHT // 2 + 135, 280, 52)
+        self.continue_button_rect = pygame.Rect(sw // 2 - 130, sh // 2 + 125, 260, 48)
         mouse_pos = pygame.mouse.get_pos()
         btn_hover = self.continue_button_rect.collidepoint(mouse_pos)
         
         btn_text = "MENU PRINCIPALE" if self.is_game_finished else "CONTINUA AL NEGOZIO"
         btn_col = (45, 160, 255) if btn_hover else (30, 120, 210)
-        pygame.draw.rect(self.screen, btn_col, self.continue_button_rect, border_radius=26)
-        pygame.draw.rect(self.screen, (150, 220, 255) if btn_hover else (80, 160, 230), self.continue_button_rect, width=2, border_radius=26)
-        draw_text(btn_text, BUTTON_FONT, WHITE, self.screen, WIDTH // 2, HEIGHT // 2 + 161)
+        pygame.draw.rect(self.screen, btn_col, self.continue_button_rect, border_radius=24)
+        pygame.draw.rect(self.screen, (150, 220, 255) if btn_hover else (80, 160, 230), self.continue_button_rect, width=2, border_radius=24)
+        draw_text(btn_text, BUTTON_FONT, WHITE, self.screen, sw // 2, sh // 2 + 149)
 
     def handle_result_events(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:

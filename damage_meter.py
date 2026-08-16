@@ -45,37 +45,39 @@ class DamageMeter:
         if not champions_team:
             return
 
-        panel_w = 265
-        panel_h = min(360, 80 + len(champions_team) * 38)
-        px = start_x if start_x is not None else (WIDTH - panel_w - 15)
-        py = start_y if start_y is not None else 75
+        panel_w = 195
+        valid_champs = [c for c in champions_team if c is not None]
+        panel_h = min(300, 48 + len(valid_champs) * 32)
+        px = start_x if start_x is not None else (surface.get_width() - panel_w - 20)
+        py = start_y if start_y is not None else 345
         
         # 1. Pulsante Toggle compatto
-        self.toggle_btn_rect = pygame.Rect(px, py - 32, 110, 26)
+        self.toggle_btn_rect = pygame.Rect(px, py - 28, 100, 22)
         btn_hover = self.toggle_btn_rect.collidepoint(mouse_pos)
         btn_bg = (24, 32, 48, 230) if btn_hover else (14, 18, 28, 200)
-        pygame.draw.rect(surface, btn_bg, self.toggle_btn_rect, border_radius=13)
-        pygame.draw.rect(surface, GOLD if self.is_visible else (120, 130, 150), self.toggle_btn_rect, width=1, border_radius=13)
+        pygame.draw.rect(surface, btn_bg, self.toggle_btn_rect, border_radius=11)
+        pygame.draw.rect(surface, GOLD if self.is_visible else (120, 130, 150), self.toggle_btn_rect, width=1, border_radius=11)
         
-        toggle_label = "📊 DANNI [TAB]" if self.is_visible else "📊 MOSTRA [TAB]"
-        draw_text(toggle_label, pygame.font.SysFont("Arial", 10, bold=True), GOLD if self.is_visible else (190, 200, 220), surface, self.toggle_btn_rect.centerx, self.toggle_btn_rect.centery)
+        toggle_label = "DANNI [TAB]" if self.is_visible else "MOSTRA [TAB]"
+        btn_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 10, bold=True)
+        draw_text(toggle_label, btn_font, GOLD if self.is_visible else (190, 200, 220), surface, self.toggle_btn_rect.centerx, self.toggle_btn_rect.centery)
         
         if not self.is_visible:
             return
 
         # 2. Card Glassmorphism Principale
         panel_rect = pygame.Rect(px, py, panel_w, panel_h)
-        draw_glass_panel(surface, panel_rect, border_radius=16, bg_color=(12, 16, 26, 235), border_color=(80, 100, 130, 180), border_width=1)
+        draw_glass_panel(surface, panel_rect, border_radius=14, bg_color=(12, 16, 26, 235), border_color=(80, 100, 130, 180), border_width=1)
         
         # 3. Header Schede Commutabili (DANNI, SUBITI, CURE)
-        tab_w = 78
-        tab_h = 24
+        tab_w = 56
+        tab_h = 20
         tabs = [("DANNI", "Danni"), ("SUBITI", "Subiti"), ("CURE", "Cure")]
         self.tab_rects.clear()
         
         for i, (tab_key, tab_label) in enumerate(tabs):
-            tx = px + 10 + i * (tab_w + 6)
-            ty = py + 10
+            tx = px + 6 + i * (tab_w + 4)
+            ty = py + 8
             t_rect = pygame.Rect(tx, ty, tab_w, tab_h)
             self.tab_rects[tab_key] = t_rect
             
@@ -96,12 +98,11 @@ class DamageMeter:
                 t_bg = (16, 20, 30) if is_hover else (12, 15, 22)
                 t_border = (50, 60, 75)
                 
-            pygame.draw.rect(surface, t_bg, t_rect, border_radius=6)
-            pygame.draw.rect(surface, t_border, t_rect, width=1, border_radius=6)
-            draw_text(tab_label, pygame.font.SysFont("Arial", 11, bold=True), t_col, surface, t_rect.centerx, t_rect.centery)
+            pygame.draw.rect(surface, t_bg, t_rect, border_radius=5)
+            pygame.draw.rect(surface, t_border, t_rect, width=1, border_radius=5)
+            draw_text(tab_label, btn_font, t_col, surface, t_rect.centerx, t_rect.centery)
 
         # 4. Ordinamento dei campioni per la metrica attiva
-        valid_champs = [c for c in champions_team if c is not None]
         if self.active_tab == "DANNI":
             valid_champs.sort(key=lambda c: c.total_damage_dealt, reverse=True)
             max_val = max(1, max((c.total_damage_dealt for c in valid_champs), default=1))
@@ -113,21 +114,22 @@ class DamageMeter:
             max_val = max(1, max((c.healing_done for c in valid_champs), default=1))
 
         # 5. Rendering delle righe statistiche
-        row_y = py + 44
+        row_y = py + 34
+        row_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 10, bold=True)
         for champ in valid_champs:
             # Mini Token Ritratto
-            token = champ.get_token_surface(size=26)
-            surface.blit(token, (px + 10, row_y + 4))
+            token = champ.get_token_surface(size=22)
+            surface.blit(token, (px + 6, row_y + 3))
             
             # Anello stelle / tier
             tier_col = getattr(champ, 'tier_color', WHITE)
-            pygame.draw.circle(surface, tier_col, (px + 23, row_y + 17), 13, width=1)
+            pygame.draw.circle(surface, tier_col, (px + 17, row_y + 14), 11, width=1)
             
             # Nome e livello pulito
             lvl = getattr(champ, 'level', 1)
-            lvl_text = f" (L{lvl})" if lvl > 1 else ""
-            name_text = f"{champ.name[:7]}{lvl_text}"
-            draw_text(name_text, pygame.font.SysFont("Arial", 10, bold=True), WHITE, surface, px + 42, row_y + 5, center=False)
+            lvl_text = f" L{lvl}" if lvl > 1 else ""
+            name_text = f"{champ.name[:6]}{lvl_text}"
+            draw_text(name_text, row_font, WHITE, surface, px + 34, row_y + 4, center=False)
             
             # Valore Totale e DPS
             if self.active_tab == "DANNI":
@@ -144,18 +146,17 @@ class DamageMeter:
                 magic = 0
 
             dps_val = int(val / max(0.5, elapsed_seconds))
-            stat_num_text = f"{val} ({dps_val} DPS)" if dps_val > 0 else f"{val}"
-            draw_text(stat_num_text, pygame.font.SysFont("Arial", 9, bold=True), (210, 220, 240), surface, px + panel_w - 10, row_y + 5, center=False)
-            # Re-allinea a destra
+            stat_num_text = f"{val}"
+            draw_text(stat_num_text, row_font, (210, 220, 240), surface, px + panel_w - 38, row_y + 4, center=False)
             
             # Barra Orizzontale Proporzionale
-            bar_x = px + 42
-            bar_y = row_y + 20
-            max_bar_w = 210
-            bar_h = 10
+            bar_x = px + 34
+            bar_y = row_y + 18
+            max_bar_w = panel_w - 44
+            bar_h = 7
             
             # Sfondo barra
-            pygame.draw.rect(surface, (18, 22, 32), (bar_x, bar_y, max_bar_w, bar_h), border_radius=5)
+            pygame.draw.rect(surface, (18, 22, 32), (bar_x, bar_y, max_bar_w, bar_h), border_radius=4)
             
             if max_val > 0 and val > 0:
                 fill_w = max(4, int(max_bar_w * (val / max_val)))
@@ -167,14 +168,14 @@ class DamageMeter:
                     magic_w = fill_w - phys_w
                     
                     if phys_w > 0:
-                        pygame.draw.rect(surface, (235, 120, 30), (bar_x, bar_y, phys_w, bar_h), border_radius=5)
+                        pygame.draw.rect(surface, (235, 120, 30), (bar_x, bar_y, phys_w, bar_h), border_radius=4)
                     if magic_w > 0:
-                        pygame.draw.rect(surface, (160, 80, 240), (bar_x + phys_w, bar_y, magic_w, bar_h), border_radius=5)
+                        pygame.draw.rect(surface, (160, 80, 240), (bar_x + phys_w, bar_y, magic_w, bar_h), border_radius=4)
                 elif self.active_tab == "SUBITI":
-                    pygame.draw.rect(surface, (70, 140, 230), (bar_x, bar_y, fill_w, bar_h), border_radius=5)
+                    pygame.draw.rect(surface, (70, 140, 230), (bar_x, bar_y, fill_w, bar_h), border_radius=4)
                 else:
-                    pygame.draw.rect(surface, (40, 200, 110), (bar_x, bar_y, fill_w, bar_h), border_radius=5)
+                    pygame.draw.rect(surface, (40, 200, 110), (bar_x, bar_y, fill_w, bar_h), border_radius=4)
                     
-            pygame.draw.rect(surface, (50, 60, 80), (bar_x, bar_y, max_bar_w, bar_h), width=1, border_radius=5)
+            pygame.draw.rect(surface, (50, 60, 80), (bar_x, bar_y, max_bar_w, bar_h), width=1, border_radius=4)
             
             row_y += 36

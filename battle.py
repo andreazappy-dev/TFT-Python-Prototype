@@ -183,10 +183,12 @@ class BattleManager:
         return battle_team
 
     def setup_board_positions(self):
-        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x4 per 1920x1080 """
-        cell_w, cell_h = 110, 110
-        offset_x = (WIDTH - (7 * cell_w)) // 2
-        offset_y = 260
+        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x4 responsive """
+        sw = self.game.screen.get_width()
+        sh = self.game.screen.get_height()
+        cell_w, cell_h = 92, 92
+        offset_x = (sw - (7 * cell_w)) // 2
+        offset_y = int(sh * 0.26)
         
         for champ in self.player_team:
             idx = getattr(champ, 'board_index', 0)
@@ -450,26 +452,30 @@ class BattleManager:
         overlay.fill((10, 14, 22, 145))
         surface.blit(overlay, (0, 0))
         
+        sw = surface.get_width()
+        sh = surface.get_height()
+        
         # 2. Header Battaglia Glassmorphism
-        head_rect = pygame.Rect(surface.get_width() // 2 - 300, 16, 600, 48)
-        draw_glass_panel(surface, head_rect, border_radius=24, bg_color=(14, 18, 28, 230), border_color=(230, 190, 70, 190), border_width=1)
-        head_font = pygame.font.SysFont("Arial", 16, bold=True)
+        head_w = min(560, sw - 440)
+        head_rect = pygame.Rect((sw - head_w) // 2, 14, head_w, 44)
+        draw_glass_panel(surface, head_rect, border_radius=22, bg_color=(14, 18, 28, 230), border_color=(230, 190, 70, 190), border_width=1)
+        head_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 15, bold=True)
         draw_text(f"VS {self.opponent_name.upper()} - SCONTRO IN CORSO", head_font, GOLD, surface, head_rect.centerx, head_rect.centery)
         
-        # 3. Sidebar Sinergie a sinistra & Classifica a destra & Damage Meter
+        # 3. Sidebar Sinergie a sinistra & Classifica a destra & Damage Meter (ZERO OVERLAP)
         mouse_pos = pygame.mouse.get_pos()
-        draw_hud_augments(surface, mouse_pos, getattr(self.game, 'player_augments', []), start_x=24, start_y=30)
-        traits_count = len(getattr(self, "player_traits", []))
-        meter_y = max(420, 80 + traits_count * 44 + 36)
-        elapsed_sec = max(0.5, (pygame.time.get_ticks() - self.battle_start_ticks) / 1000.0)
-        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=24, start_y=meter_y)
+        draw_hud_augments(surface, mouse_pos, getattr(self.game, 'player_augments', []), start_x=20, start_y=14)
+        draw_traits_sidebar(surface, getattr(self, "player_traits", []), start_x=20, start_y=54)
         
         if hasattr(self.game, 'lobby_manager'):
-            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=1630, start_y=75)
+            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=sw - 215, start_y=14)
         
-        # 4. Campo di battaglia a griglia curva (7x4)
-        cell_w, cell_h = 110, 110
-        offset_x, offset_y = (WIDTH - (7 * cell_w)) // 2, 260
+        elapsed_sec = max(0.5, (pygame.time.get_ticks() - self.battle_start_ticks) / 1000.0)
+        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=sw - 215, start_y=345)
+        
+        # 4. Campo di battaglia a griglia (7x4)
+        cell_w, cell_h = 92, 92
+        offset_x, offset_y = (sw - (7 * cell_w)) // 2, int(sh * 0.26)
         cols, rows = 7, 4
         
         for r in range(rows):
