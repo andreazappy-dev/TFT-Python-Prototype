@@ -1,9 +1,9 @@
 import pygame
 import random
 from champions import Champion, get_available_champions
-from traits import calculate_team_traits, draw_traits_sidebar
-from items import get_item_data
-from asset_loader import get_background_image, draw_glass_panel
+from traits import calculate_team_traits, draw_traits_sidebar, TRAITS_DATA
+from items import get_item_data, get_item_icon_surface, draw_item_icon
+from asset_loader import get_background_image, draw_glass_panel, create_card_image
 from augments import draw_hud_augments
 
 # Importo da config.py
@@ -46,6 +46,11 @@ class ShopManager:
         self.is_dragging_item = False
         self.dragged_item_idx = -1
         self.dragged_item_key = None
+        
+        # --- Ispettore Campione su Click ---
+        self.inspected_champion = None
+        self.inspector_rect = pygame.Rect(0, 0, 540, 660)
+        self.inspector_close_rect = pygame.Rect(0, 0, 36, 36)
         
         self.scroll_y = 0
 
@@ -244,6 +249,16 @@ class ShopManager:
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         
+        # Chiusura Ispettore con ESC o Spazio
+        if self.inspected_champion:
+            if event.type == pygame.KEYDOWN and event.key in [pygame.K_ESCAPE, pygame.K_SPACE]:
+                self.inspected_champion = None
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.inspector_close_rect.collidepoint(mouse_pos) or not self.inspector_rect.collidepoint(mouse_pos):
+                    self.inspected_champion = None
+                    return
+
         if hasattr(self.game, 'damage_meter') and self.game.damage_meter.handle_event(event):
             return
             
@@ -314,19 +329,17 @@ class ShopManager:
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 3: # Click destro per vendere
+            if event.button == 3: # Click destro per ispezionare / vendere
                 board_rects = self.get_board_rects()
                 bench_rects = self.get_bench_rects()
                 
                 for i, rect in enumerate(board_rects):
                     if rect.collidepoint(mouse_pos) and self.game.board[i]:
-                        self.sell_champion(self.game.board[i])
-                        self.game.board[i] = None
+                        self.inspected_champion = self.game.board[i]
                         return 
                 for i, rect in enumerate(bench_rects):
                     if rect.collidepoint(mouse_pos) and self.game.bench[i]:
-                        self.sell_champion(self.game.bench[i])
-                        self.game.bench[i] = None
+                        self.inspected_champion = self.game.bench[i]
                         return 
                 return 
 
@@ -340,11 +353,23 @@ class ShopManager:
                 if self.confirm_button_rect.collidepoint(mouse_pos) and any(c is not None for c in self.game.board):
                     self.game.start_battle()
                     return
+                    
+                # Click sulle Card dello Shop
                 for i, rect in enumerate(self.buy_buttons):
                     if rect.collidepoint(mouse_pos):
                         if self.shop_champs[i]:
                             self.buy_champion(self.shop_champs[i], i)
                         return
+
+                # Click per ispezionare una carta nello Shop
+                for i, champ in enumerate(self.shop_champs):
+                    if champ:
+                        x = 215 + i * self.spacing_x
+                        y = self.margin_y + self.scroll_y
+                        card_rect = pygame.Rect(x, y, *self.card_size)
+                        if card_rect.collidepoint(mouse_pos):
+                            self.inspected_champion = champ
+                            return
                 
                 # Inizia DRAG OGGETTI
                 item_rects = self.get_item_bench_rects()
@@ -355,16 +380,18 @@ class ShopManager:
                         self.dragged_item_key = self.game.player_items[i]
                         return
 
-                # Inizia DRAG CAMPIONI
+                # Inizia DRAG CAMPIONI & Ispezione
                 board_rects = self.get_board_rects()
                 bench_rects = self.get_bench_rects()
                 
                 for i, rect in enumerate(board_rects):
                     if rect.collidepoint(mouse_pos) and self.game.board[i]:
+                        self.inspected_champion = self.game.board[i]
                         self.start_dragging(self.game.board, i)
                         return
                 for i, rect in enumerate(bench_rects):
                     if rect.collidepoint(mouse_pos) and self.game.bench[i]:
+                        self.inspected_champion = self.game.bench[i]
                         self.start_dragging(self.game.bench, i)
                         return
     
@@ -448,16 +475,11 @@ class ShopManager:
         items = getattr(champ, "items", [])
         if not items:
             return
-        item_font = pygame.font.SysFont("Arial", 9, bold=True)
         for idx, item in enumerate(items[:3]):
-            data = get_item_data(item)
             ix = cx - 20 + idx * 20
             iy = cy + 18
-            ibox = pygame.Rect(ix - 8, iy - 6, 18, 13)
-            pygame.draw.rect(surface, data.get("color", (100, 100, 100)), ibox, border_radius=3)
-            pygame.draw.rect(surface, (0, 0, 0), ibox, width=1, border_radius=3)
-            tag_text = data.get("tag", "ITM")
-            draw_text(tag_text, item_font, (255, 255, 255), surface, ibox.centerx, ibox.centery)
+            ibox = pygame.Rect(ix - 9, iy - 9, 18, 18)
+            draw_item_icon(surface, item, ibox)
 
     def draw(self, surface):
         mouse_pos = pygame.mouse.get_pos()
@@ -725,23 +747,21 @@ class ShopManager:
         draw_text("BANCO OGGETTI", item_title_font, GOLD, surface, item_box_rect.centerx, item_box_rect.top + 12)
         
         item_rects = self.get_item_bench_rects()
-        item_font = pygame.font.SysFont("Arial", 12, bold=True)
         
         hovered_item_desc = None
         for i, rect in enumerate(item_rects):
+            is_slot_hover = rect.collidepoint(mouse_pos)
             pygame.draw.rect(surface, (20, 26, 38), rect, border_radius=8)
-            pygame.draw.rect(surface, (60, 75, 95), rect, width=1, border_radius=8)
+            pygame.draw.rect(surface, (80, 100, 130) if is_slot_hover else (45, 55, 75), rect, width=1, border_radius=8)
             
             if i < len(self.game.player_items):
                 item_key = self.game.player_items[i]
                 data = get_item_data(item_key)
                 
-                # Slot pieno
-                pygame.draw.rect(surface, data.get("color", (100, 100, 100)), rect.inflate(-4, -4), border_radius=6)
-                tag_text = data.get("tag", "ITM")
-                draw_text(tag_text, item_font, WHITE, surface, rect.centerx, rect.centery)
+                # Disegna icona grafica reale
+                draw_item_icon(surface, item_key, rect, is_hover=is_slot_hover)
                 
-                if rect.collidepoint(mouse_pos) and not self.is_dragging_item:
+                if is_slot_hover and not self.is_dragging_item:
                     hovered_item_desc = f"{data.get('name','')}: {data.get('desc','')}"
 
         if hovered_item_desc:
@@ -752,14 +772,10 @@ class ShopManager:
             pygame.draw.rect(surface, GOLD, tip_box, width=1, border_radius=8)
             surface.blit(tip_surf, (tip_box.x + 8, tip_box.y + 6))
 
-        # --- DRAG & DROP OGGETTI FEEDBACK ---
+        # --- DRAG & DROP OGGETTI FEEDBACK (ICONA GRAFICA) ---
         if self.is_dragging_item and self.dragged_item_key:
-            data = get_item_data(self.dragged_item_key)
-            drect = pygame.Rect(mouse_pos[0] - 22, mouse_pos[1] - 22, 44, 44)
-            pygame.draw.rect(surface, data.get("color", (100, 100, 100)), drect, border_radius=10)
-            pygame.draw.rect(surface, WHITE, drect, width=2, border_radius=10)
-            tag_text = data.get("tag", "ITM")
-            draw_text(tag_text, pygame.font.SysFont("Arial", 14, bold=True), WHITE, surface, drect.centerx, drect.centery)
+            drag_icon = get_item_icon_surface(self.dragged_item_key, size=44, is_hover=True)
+            surface.blit(drag_icon, (mouse_pos[0] - 22, mouse_pos[1] - 22))
 
         # --- DRAG & DROP CAMPIONI FEEDBACK ---
         if self.is_dragging and self.dragged_champ:
@@ -768,3 +784,165 @@ class ShopManager:
             tier_color = getattr(self.dragged_champ, 'tier_color', WHITE)
             pygame.draw.circle(surface, tier_color, mouse_pos, 34, width=3)
             pygame.draw.circle(surface, (255, 255, 255), mouse_pos, 36, width=1)
+
+        # --- 9. MODAL ISPETTORE CAMPIONE SU CLICK ---
+        if self.inspected_champion:
+            self.draw_champion_inspector(surface, self.inspected_champion)
+
+    def draw_champion_inspector(self, surface, champ):
+        """
+        Disegna la Scheda Dettaglio / Ispettore Campione su Click (Glassmorphism TFT).
+        Mostra: Portrait grande, Tier/Costo, Stelle, Tratti/Sinergie con spiegazione estesa,
+        statistiche di combattimento complete, abilità speciale e oggetti.
+        """
+        if not champ:
+            return
+
+        mouse_pos = pygame.mouse.get_pos()
+        sw = surface.get_width()
+        sh = surface.get_height()
+
+        # 1. Dark Backdrop Overlay
+        backdrop = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        backdrop.fill((0, 0, 0, 165))
+        surface.blit(backdrop, (0, 0))
+
+        # 2. Main Modal Rect
+        modal_w = 540
+        modal_h = 660
+        modal_x = (sw - modal_w) // 2
+        modal_y = (sh - modal_h) // 2
+        self.inspector_rect = pygame.Rect(modal_x, modal_y, modal_w, modal_h)
+
+        # Glassmorphism Card Background
+        tier_col = getattr(champ, 'tier_color', (180, 160, 60))
+        draw_glass_panel(surface, self.inspector_rect, border_radius=22, bg_color=(15, 20, 32, 250), border_color=(*tier_col[:3], 220), border_width=2)
+
+        # Pulsante Chiusura "✕"
+        self.inspector_close_rect = pygame.Rect(modal_x + modal_w - 44, modal_y + 16, 30, 30)
+        close_hover = self.inspector_close_rect.collidepoint(mouse_pos)
+        pygame.draw.circle(surface, (200, 45, 55) if close_hover else (35, 45, 65), self.inspector_close_rect.center, 15)
+        pygame.draw.circle(surface, (255, 100, 110) if close_hover else (80, 95, 120), self.inspector_close_rect.center, 15, width=1)
+        close_font = pygame.font.SysFont("Arial", 16, bold=True)
+        draw_text("✕", close_font, (255, 255, 255), surface, self.inspector_close_rect.centerx, self.inspector_close_rect.centery)
+
+        # Fonts
+        title_font = pygame.font.SysFont("Arial", 24, bold=True)
+        h2_font = pygame.font.SysFont("Arial", 14, bold=True)
+        body_font = pygame.font.SysFont("Arial", 12, bold=False)
+        sub_font = pygame.font.SysFont("Arial", 11, bold=True)
+
+        # 3. HEADER & RITRATTO
+        portrait_rect = pygame.Rect(modal_x + 24, modal_y + 24, 96, 96)
+        draw_glass_panel(surface, portrait_rect, border_radius=14, bg_color=(10, 14, 22, 240), border_color=tier_col, border_width=2)
+        
+        p_surf = create_card_image(champ.name, width=90, height=90)
+        surface.blit(p_surf, (portrait_rect.x + 3, portrait_rect.y + 3))
+
+        # Nome del Campione
+        champ_name_x = modal_x + 135
+        draw_text(champ.name, title_font, (255, 255, 255), surface, champ_name_x + 10, modal_y + 36)
+
+        # Stelle ★
+        stars = getattr(champ, "level", 1)
+        star_str = "★" * stars
+        draw_text(f"Rango: {star_str}", h2_font, GOLD, surface, champ_name_x + 40, modal_y + 64)
+
+        # Badge Costo Tier
+        cost = getattr(champ, "cost", 1)
+        cost_badge = pygame.Rect(champ_name_x + 130, modal_y + 54, 110, 22)
+        pygame.draw.rect(surface, (*tier_col[:3], 60), cost_badge, border_radius=11)
+        pygame.draw.rect(surface, tier_col, cost_badge, width=1, border_radius=11)
+        draw_text(f"TIER {cost} • {cost} ORO", sub_font, tier_col, surface, cost_badge.centerx, cost_badge.centery)
+
+        # 4. SEZIONE TRATTI & SINERGIE (CON DESCRIZIONI COMPLETE)
+        traits_y = modal_y + 135
+        draw_text("TRATTI & SINERGIE", h2_font, (240, 205, 70), surface, modal_x + 85, traits_y)
+
+        curr_ty = traits_y + 16
+        for tname in getattr(champ, "traits", []):
+            tdata = TRAITS_DATA.get(tname, {
+                "color": (160, 160, 160),
+                "type": "ORIGIN",
+                "breakpoints": [2],
+                "description": "Sinergia di combattimento."
+            })
+            tcolor = tdata["color"]
+            ttype = tdata.get("type", "ORIGIN")
+            
+            # Badge Tratto
+            tbadge_rect = pygame.Rect(modal_x + 24, curr_ty, modal_w - 48, 48)
+            draw_glass_panel(surface, tbadge_rect, border_radius=10, bg_color=(20, 26, 40, 230), border_color=tcolor, border_width=1)
+            
+            # Icona circolare
+            pygame.draw.circle(surface, tcolor, (modal_x + 44, curr_ty + 24), 12)
+            pygame.draw.circle(surface, (255, 255, 255), (modal_x + 44, curr_ty + 24), 5)
+            
+            # Titolo Tratto + Tipo
+            ttxt = f"{tname} ({ttype})"
+            name_surf = h2_font.render(ttxt, True, tcolor)
+            surface.blit(name_surf, (modal_x + 65, curr_ty + 5))
+            
+            # Breakpoints & Descrizione
+            bp_str = "/".join(str(b) for b in tdata.get("breakpoints", []))
+            desc_txt = f"Soglie ({bp_str}): {tdata.get('description', '')}"
+            desc_surf = sub_font.render(desc_txt[:62], True, (210, 220, 235))
+            surface.blit(desc_surf, (modal_x + 65, curr_ty + 26))
+            
+            curr_ty += 54
+
+        # 5. STATISTICHE DI COMBATTIMENTO
+        stats_y = curr_ty + 10
+        draw_text("STATISTICHE BASE", h2_font, (240, 205, 70), surface, modal_x + 85, stats_y)
+        
+        # Grid box statistiche
+        stats_box = pygame.Rect(modal_x + 24, stats_y + 16, modal_w - 48, 110)
+        draw_glass_panel(surface, stats_box, border_radius=12, bg_color=(16, 22, 34, 220), border_color=(60, 75, 100), border_width=1)
+        
+        # 1a colonna
+        c1_x = stats_box.x + 14
+        draw_text(f"Salute (HP): {champ.hp} / {champ.max_hp}", sub_font, (120, 255, 160), surface, c1_x + 60, stats_box.y + 18)
+        draw_text(f"Mana: {champ.mana_start} / {champ.mana_max}", sub_font, (100, 200, 255), surface, c1_x + 48, stats_box.y + 42)
+        draw_text(f"Attacco (AD): {champ.base_attack}", sub_font, (255, 215, 80), surface, c1_x + 55, stats_box.y + 66)
+        draw_text(f"Difesa (Armor): {getattr(champ, 'base_defense', 0)}", sub_font, (190, 205, 230), surface, c1_x + 58, stats_box.y + 90)
+        
+        # 2a colonna
+        c2_x = stats_box.centerx + 14
+        draw_text(f"Vel. Attacco: {champ.attack_speed:.2f}/s", sub_font, (240, 180, 70), surface, c2_x + 55, stats_box.y + 18)
+        range_str = "Mischia (80px)" if champ.attack_range < 100 else ("Cecchino (500px)" if champ.attack_range > 350 else "Distanza (300px)")
+        draw_text(f"Raggio: {range_str}", sub_font, (220, 225, 240), surface, c2_x + 65, stats_box.y + 42)
+        crit_pct = int(champ.crit_chance * 100)
+        draw_text(f"Critico: {crit_pct}% ({champ.crit_multiplier:.1f}x)", sub_font, (255, 120, 140), surface, c2_x + 58, stats_box.y + 66)
+        sp_pct = int(getattr(champ, 'spell_power_mult', 1.0) * 100)
+        draw_text(f"Potere Magico (AP): {sp_pct}%", sub_font, (210, 130, 255), surface, c2_x + 68, stats_box.y + 90)
+
+        # 6. ABILITÀ SPECIALE
+        ability_y = stats_box.bottom + 12
+        ab_info = champ.get_ability_info() if hasattr(champ, 'get_ability_info') else {"name": "Abilità", "type": "Speciale", "cost": "100 Mana", "desc": "Mossa speciale"}
+        
+        ab_box = pygame.Rect(modal_x + 24, ability_y, modal_w - 48, 80)
+        draw_glass_panel(surface, ab_box, border_radius=12, bg_color=(22, 28, 44, 230), border_color=(120, 90, 210), border_width=1)
+        
+        ab_title = f"✨ {ab_info['name']}  ({ab_info.get('type', 'Speciale')})  -  {ab_info.get('cost', '')}"
+        ab_surf = h2_font.render(ab_title, True, (255, 235, 120))
+        surface.blit(ab_surf, (ab_box.x + 12, ab_box.y + 8))
+        
+        desc = ab_info.get("desc", "")
+        line1 = desc[:66]
+        line2 = desc[66:132] if len(desc) > 66 else ""
+        surface.blit(body_font.render(line1, True, (215, 225, 240)), (ab_box.x + 12, ab_box.y + 32))
+        if line2:
+            surface.blit(body_font.render(line2, True, (215, 225, 240)), (ab_box.x + 12, ab_box.y + 50))
+
+        # 7. OGGETTI EQUIPAGGIATI (0/3)
+        item_y = ab_box.bottom + 10
+        draw_text("OGGETTI EQUIPAGGIATI (Max 3):", sub_font, (180, 195, 215), surface, modal_x + 115, item_y + 12)
+        
+        champ_items = getattr(champ, "items", [])
+        for idx in range(3):
+            slot_rect = pygame.Rect(modal_x + 240 + idx * 48, item_y - 2, 38, 38)
+            if idx < len(champ_items):
+                draw_item_icon(surface, champ_items[idx], slot_rect)
+            else:
+                draw_glass_panel(surface, slot_rect, border_radius=8, bg_color=(12, 16, 24, 180), border_color=(45, 55, 75), border_width=1)
+                draw_text("•", sub_font, (80, 90, 110), surface, slot_rect.centerx, slot_rect.centery)

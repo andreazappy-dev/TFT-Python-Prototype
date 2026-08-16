@@ -10,7 +10,7 @@ from config import draw_text, TEXT_FONT, GREEN, RED, BLUE, BLACK, WHITE, GOLD
 # Importiamo la classe Champion aggiornata
 from champions import Champion, SPRITE_SIZE
 from traits import calculate_team_traits, apply_trait_buffs, draw_traits_sidebar
-from items import apply_item_stats, get_item_data
+from items import apply_item_stats, get_item_data, draw_item_icon, get_item_icon_surface
 from asset_loader import get_background_image, draw_glass_panel, get_champion_sprite
 from augments import draw_hud_augments
 from damage_meter import DamageMeter
@@ -538,18 +538,14 @@ class BattleManager:
                     # Barre HP e Mana
                     self.draw_hp_bar(surface, champ, cx, cy)
 
-                    # Badge Oggetti Equipaggiati
+                    # Badge Oggetti Equipaggiati (Icone Grafiche)
                     champ_items = getattr(champ, "items", [])
                     if champ_items:
-                        item_font = pygame.font.SysFont("Arial", 9, bold=True)
                         for idx, itm in enumerate(champ_items[:3]):
-                            it_data = get_item_data(itm)
                             it_x = cx - 18 + idx * 18
                             it_y = cy + 28
-                            it_box = pygame.Rect(it_x - 7, it_y - 7, 15, 15)
-                            pygame.draw.rect(surface, it_data.get("color", (100, 100, 100)), it_box, border_radius=4)
-                            pygame.draw.rect(surface, (0, 0, 0), it_box, width=1, border_radius=4)
-                            draw_text(it_data.get("tag", "•")[:3], item_font, WHITE, surface, it_box.centerx, it_box.centery)
+                            it_box = pygame.Rect(it_x - 8, it_y - 8, 16, 16)
+                            draw_item_icon(surface, itm, it_box)
 
         # 7. Disegna Fendenti e Archi d'Attacco
         for slash in self.slash_effects:

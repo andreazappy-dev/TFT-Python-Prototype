@@ -1,5 +1,6 @@
 # items.py
 import random
+import math
 import pygame
 from config import draw_text, TEXT_FONT
 
@@ -251,102 +252,103 @@ RECIPES = {
     ("tear", "gloves"): {
         "name": "Hand of Justice",
         "tag": "HOJ",
-        "color": (245, 185, 85),
-        "desc": "+20 Mana, +15% Crit, +15% Danno & Cura",
-        "bonus": {"mana_start": 20, "crit": 0.15, "omnivamp": 0.15}
+        "color": (245, 165, 85),
+        "desc": "+15 AD/AP, +15% Vampirismo",
+        "bonus": {"attack": 15, "spell_power": 0.15, "omnivamp": 0.15}
     },
     ("vest", "vest"): {
         "name": "Bramble Vest",
         "tag": "BV",
-        "color": (185, 105, 45),
-        "desc": "+55 Corazza, riduce danni subiti",
+        "color": (185, 145, 95),
+        "desc": "+55 Corazza, blocca colpi critici",
         "bonus": {"defense": 55}
-    },
-    ("vest", "belt"): {
-        "name": "Sunfire Cape",
-        "tag": "SFC",
-        "color": (245, 105, 25),
-        "desc": "+25 Corazza, +200 HP, brucia nemici",
-        "bonus": {"defense": 25, "hp": 200}
     },
     ("vest", "cloak"): {
         "name": "Gargoyle Stoneplate",
         "tag": "GSP",
-        "color": (165, 165, 185),
-        "desc": "+30 Corazza, +30 Resistenza Magica",
+        "color": (185, 185, 125),
+        "desc": "+30 Corazza, +30 RM, bonus resistenze",
         "bonus": {"defense": 30, "magic_resist": 30}
+    },
+    ("vest", "belt"): {
+        "name": "Sunfire Cape",
+        "tag": "SFC",
+        "color": (245, 105, 45),
+        "desc": "+25 Corazza, +200 HP, bruciatura AoE",
+        "bonus": {"defense": 25, "hp": 200}
     },
     ("vest", "gloves"): {
         "name": "Steadfast Heart",
         "tag": "SH",
-        "color": (185, 145, 205),
-        "desc": "+25 Corazza, +15% Crit, -15% danni subiti",
-        "bonus": {"defense": 25, "crit": 0.15}
-    },
-    ("belt", "belt"): {
-        "name": "Warmog's Armor",
-        "tag": "WAR",
-        "color": (45, 225, 105),
-        "desc": "+650 HP Massimi",
-        "bonus": {"hp": 650}
-    },
-    ("belt", "cloak"): {
-        "name": "Evenshroud",
-        "tag": "EVS",
-        "color": (145, 85, 165),
-        "desc": "+200 HP, +25 RM",
-        "bonus": {"hp": 200, "magic_resist": 25}
-    },
-    ("belt", "gloves"): {
-        "name": "Guardbreaker",
-        "tag": "GBK",
-        "color": (225, 125, 105),
-        "desc": "+200 HP, +20% Crit, +20% Danni",
-        "bonus": {"hp": 200, "crit": 0.20}
+        "color": (145, 165, 185),
+        "desc": "+25 Corazza, +20% Crit, riduce danni",
+        "bonus": {"defense": 25, "crit": 0.20}
     },
     ("cloak", "cloak"): {
         "name": "Dragon's Claw",
-        "tag": "DCW",
-        "color": (85, 205, 225),
-        "desc": "+60 Resistenza Magica, rigenerazione",
+        "tag": "DC",
+        "color": (65, 205, 185),
+        "desc": "+60 RM, rigenera salute ogni 2s",
         "bonus": {"magic_resist": 60}
+    },
+    ("cloak", "belt"): {
+        "name": "Evenshroud",
+        "tag": "ES",
+        "color": (105, 185, 145),
+        "desc": "+25 RM, +200 HP, indebolisce nemici",
+        "bonus": {"magic_resist": 25, "hp": 200}
     },
     ("cloak", "gloves"): {
         "name": "Quicksilver",
         "tag": "QSS",
-        "color": (185, 225, 245),
-        "desc": "+25 RM, +20% Crit, +30% Vel. Attacco",
-        "bonus": {"magic_resist": 25, "crit": 0.20, "attack_speed": 0.30}
+        "color": (145, 205, 245),
+        "desc": "+25 RM, +20% Crit, immunità al controllo",
+        "bonus": {"magic_resist": 25, "crit": 0.20}
+    },
+    ("belt", "belt"): {
+        "name": "Warmog's Armor",
+        "tag": "WM",
+        "color": (65, 205, 85),
+        "desc": "+600 HP Massimi",
+        "bonus": {"hp": 600}
+    },
+    ("belt", "gloves"): {
+        "name": "Guardbreaker",
+        "tag": "GBR",
+        "color": (205, 125, 145),
+        "desc": "+200 HP, +20% Crit, rompe scudi nemici",
+        "bonus": {"hp": 200, "crit": 0.20}
     },
     ("gloves", "gloves"): {
         "name": "Thief's Gloves",
         "tag": "TG",
-        "color": (225, 185, 65),
-        "desc": "+30% Critico, +150 HP, +15 AD",
-        "bonus": {"crit": 0.30, "hp": 150, "attack": 15}
+        "color": (225, 65, 125),
+        "desc": "+30% Crit, equipaggia 2 oggetti random ogni round",
+        "bonus": {"crit": 0.30}
     }
 }
 
-# Dizionario ricette con chiavi ordinate canoniche per sicurezza
-_CANONICAL_RECIPES = {
-    tuple(sorted(k)): v for k, v in RECIPES.items()
-}
+# Costruiamo il dizionario bidirezionale per la ricerca ricette
+_CANONICAL_RECIPES = {}
+for (c1, c2), data in RECIPES.items():
+    key = tuple(sorted([c1, c2]))
+    _CANONICAL_RECIPES[key] = data
 
-def normalize_component_key(comp):
-    """Normalizza una chiave o nome componente alla sua chiave canonica"""
-    if comp in COMPONENTS:
-        return comp
+def get_random_component_key():
+    """Ritorna la chiave di un componente casuale tra gli 8 disponibili"""
+    return random.choice(list(COMPONENTS.keys()))
+
+def normalize_component_key(name_or_key):
+    """Converte un nome esteso o chiave di componente nella chiave canonica"""
+    if name_or_key in COMPONENTS:
+        return name_or_key
     for k, v in COMPONENTS.items():
-        if v["name"] == comp or v.get("short") == comp:
+        if v["name"].lower() == name_or_key.lower() or v.get("short", "").lower() == name_or_key.lower():
             return k
     return None
 
-def get_random_component_key():
-    """Restituisce la chiave di un componente casuale"""
-    return random.choice(list(COMPONENTS.keys()))
-
 def get_item_data(item_key):
-    """Restituisce le info di un componente o oggetto combinato"""
+    """Restituisce il dizionario con nome, stats, colore e tag per qualsiasi oggetto o componente"""
     # 1. Controllo per chiave componente
     if item_key in COMPONENTS:
         data = dict(COMPONENTS[item_key])
@@ -370,7 +372,6 @@ def get_item_data(item_key):
             data["key"] = recipe["name"]
             return data
             
-    # Oggetto generico
     return {
         "name": item_key,
         "tag": "OBJ",
@@ -396,9 +397,7 @@ def combine_components(comp1_key, comp2_key):
     return None
 
 def apply_item_stats(champion):
-    """
-    Applica tutti i bonus statistici cumulativi degli oggetti equipaggiati sul campione.
-    """
+    """Applica tutti i bonus statistici cumulativi degli oggetti equipaggiati sul campione."""
     items = getattr(champion, "items", [])
     if not items:
         return
@@ -410,43 +409,127 @@ def apply_item_stats(champion):
             item_data = item
 
         bonus = item_data.get("bonus", {})
-        
-        # HP
         if "hp" in bonus:
             champion.base_hp += bonus["hp"]
             champion.max_hp += bonus["hp"]
             champion.hp += bonus["hp"]
-            
-        # Attack Damage
         if "attack" in bonus:
             champion.base_attack += bonus["attack"]
-            
-        # Defense (Armor)
         if "defense" in bonus:
             champion.base_defense += bonus["defense"]
-            
-        # Attack Speed
         if "attack_speed" in bonus:
             champion.attack_speed = float(champion.attack_speed * (1.0 + bonus["attack_speed"]))
-            
-        # Starting Mana
         if "mana_start" in bonus:
             champion.mana_start = min(champion.mana_max, champion.mana_start + bonus["mana_start"])
             champion.current_mana = champion.mana_start
-            
-        # Mana per hit
         if "mana_per_hit" in bonus:
             champion.mana_per_hit = getattr(champion, "mana_per_hit", 10) + bonus["mana_per_hit"]
-            
-        # Crit Chance
         if "crit" in bonus:
             champion.crit_chance = min(1.0, champion.crit_chance + bonus["crit"])
-            
-        # Spell Power
         if "spell_power" in bonus:
             champion.spell_power_mult = getattr(champion, "spell_power_mult", 1.0) + bonus["spell_power"]
-            
-        # Omnivamp / Lifesteal
         if "omnivamp" in bonus or "lifesteal" in bonus:
             vamp = bonus.get("omnivamp", bonus.get("lifesteal", 0.0))
             champion.lifesteal = getattr(champion, "lifesteal", 0.0) + vamp
+
+# Cache per icone grafiche procedurali
+_ITEM_ICON_CACHE = {}
+
+def get_item_icon_surface(item_key, size=36, is_hover=False):
+    """
+    Restituisce una Surface Pygame con l'icona grafica dettagliata ad alta definizione dell'oggetto.
+    Disegna simboli stilizzati (Spade, Archi, Bacchette, Lacrime, Armature, ecc.).
+    """
+    cache_key = (str(item_key), size, is_hover)
+    if cache_key in _ITEM_ICON_CACHE:
+        return _ITEM_ICON_CACHE[cache_key]
+
+    data = get_item_data(item_key)
+    name = data.get("name", str(item_key)).lower()
+    is_comp = data.get("is_component", False)
+    theme_col = data.get("color", (180, 160, 60))
+
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    
+    # 1. Bordo e Sfondo con Glassmorphism metallico
+    bg_col = (20, 24, 36, 240)
+    border_col = (255, 215, 80) if not is_comp else (theme_col if is_hover else (140, 150, 175))
+    border_w = 2 if (not is_comp or is_hover) else 1
+
+    pygame.draw.rect(surf, bg_col, (0, 0, size, size), border_radius=7)
+    
+    # Gradiente interno
+    inner_rect = pygame.Rect(2, 2, size - 4, size - 4)
+    tint_surf = pygame.Surface((inner_rect.width, inner_rect.height), pygame.SRCALPHA)
+    tint_surf.fill((*theme_col[:3], 45))
+    surf.blit(tint_surf, (2, 2))
+
+    cx = size // 2
+    cy = size // 2
+    
+    # 2. VETTORIALE STILIZZATO PER OGNI OGGETTO
+    if "sword" in name or "spada" in name or "blade" in name or "slayer" in name:
+        # Spada metallica
+        blade_col = (235, 240, 255) if is_comp else (255, 215, 70)
+        pygame.draw.line(surf, blade_col, (cx - 7, cy + 7), (cx + 7, cy - 7), 3) # Lama
+        pygame.draw.line(surf, (190, 160, 50), (cx - 3, cy + 1), (cx - 1, cy + 5), 2) # Guardia
+        pygame.draw.circle(surf, (220, 40, 40), (cx - 7, cy + 7), 2) # Pomolo
+        
+    elif "bow" in name or "arco" in name or "whisper" in name or "hurricane" in name:
+        # Arco d'oro ricurvo con corda
+        pygame.draw.arc(surf, (245, 215, 60), (cx - 9, cy - 9, 18, 18), -0.7, 2.4, width=2)
+        pygame.draw.line(surf, (140, 230, 255), (cx - 7, cy - 7), (cx + 7, cy + 7), 1)
+        pygame.draw.circle(surf, (255, 255, 255), (cx, cy), 2)
+        
+    elif "rod" in name or "bacchetta" in name or "deathcap" in name or "archangel" in name or "morello" in name or "spark" in name:
+        # Scettro / Gemma magica pulsante
+        pygame.draw.line(surf, (160, 130, 80), (cx - 6, cy + 6), (cx + 3, cy - 3), 2)
+        pygame.draw.circle(surf, (200, 80, 255), (cx + 5, cy - 5), 5)
+        pygame.draw.circle(surf, (255, 255, 255), (cx + 5, cy - 5), 2)
+        
+    elif "tear" in name or "lacrima" in name or "blue buff" in name or "redemption" in name or "vow" in name:
+        # Goccia di Zaffiro brillante
+        pygame.draw.circle(surf, (60, 160, 255), (cx, cy + 2), 6)
+        pygame.draw.polygon(surf, (60, 160, 255), [(cx - 5, cy + 2), (cx + 5, cy + 2), (cx, cy - 7)])
+        pygame.draw.circle(surf, (255, 255, 255), (cx - 1, cy + 1), 2)
+        
+    elif "vest" in name or "corazza" in name or "bramble" in name or "stoneplate" in name or "sunfire" in name or "gargoyle" in name:
+        # Corazza a piastre
+        pygame.draw.polygon(surf, (190, 200, 215), [(cx - 7, cy - 6), (cx + 7, cy - 6), (cx + 5, cy + 7), (cx - 5, cy + 7)])
+        pygame.draw.line(surf, (245, 190, 50), (cx, cy - 5), (cx, cy + 6), 2)
+        
+    elif "cloak" in name or "cappa" in name or "dragon" in name or "quicksilver" in name or "evenshroud" in name:
+        # Cappa / Mantello mistico
+        pygame.draw.polygon(surf, (60, 220, 180), [(cx - 7, cy - 6), (cx + 7, cy - 6), (cx + 8, cy + 7), (cx - 8, cy + 7)])
+        pygame.draw.circle(surf, (255, 240, 120), (cx, cy - 4), 2)
+        
+    elif "belt" in name or "cintura" in name or "warmog" in name or "sterak" in name or "nashor" in name:
+        # Cintura massiccia con fibbia
+        pygame.draw.rect(surf, (180, 50, 60), (cx - 8, cy - 4, 16, 8), border_radius=2)
+        pygame.draw.rect(surf, (255, 215, 60), (cx - 4, cy - 5, 8, 10), width=2, border_radius=2)
+        
+    elif "glove" in name or "guanti" in name or "thief" in name or "guardbreaker" in name or "justice" in name:
+        # Guanto da combattimento
+        pygame.draw.rect(surf, (220, 70, 90), (cx - 6, cy - 5, 12, 11), border_radius=3)
+        pygame.draw.circle(surf, (245, 215, 50), (cx - 3, cy - 2), 2)
+        pygame.draw.circle(surf, (245, 215, 50), (cx + 3, cy - 2), 2)
+        
+    else:
+        # Icona generica emblema / cristallo
+        pygame.draw.circle(surf, theme_col, (cx, cy), 6)
+        pygame.draw.circle(surf, (255, 255, 255), (cx, cy), 3)
+
+    # 3. Disegna bordo
+    pygame.draw.rect(surf, border_col, (0, 0, size, size), width=border_w, border_radius=7)
+    
+    # 4. Indicatore Oggetto Completo (Angolo d'Oro)
+    if not is_comp:
+        pygame.draw.circle(surf, (255, 215, 60), (size - 4, 4), 2)
+
+    _ITEM_ICON_CACHE[cache_key] = surf
+    return surf
+
+def draw_item_icon(surface, item_key, rect, is_hover=False):
+    """Disegna direttamente l'icona grafica nel rettangolo specificato"""
+    icon_surf = get_item_icon_surface(item_key, size=min(rect.width, rect.height), is_hover=is_hover)
+    surface.blit(icon_surf, (rect.x, rect.y))

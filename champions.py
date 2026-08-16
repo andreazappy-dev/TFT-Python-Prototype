@@ -110,6 +110,135 @@ class Champion:
     def total_damage_dealt(self):
         return self.damage_dealt_physical + self.damage_dealt_magic
         
+    def get_ability_info(self):
+        """Restituisce nome, costo mana e descrizione dettagliata dell'abilità speciale per l'ispettore"""
+        sp_mult = getattr(self, "spell_power_mult", 1.0)
+        spell_mult = (1.0 + (self.level - 1) * 0.80) * sp_mult
+        
+        abilities = {
+            "Garen": {
+                "name": "Giudizio",
+                "type": "Magico AoE",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Garen ruota con la sua spada per 1s, infliggendo {int(140 * spell_mult)} danni magici a tutti i nemici vicini nel raggio d'azione."
+            },
+            "Darius": {
+                "name": "Ghigliottina di Noxus",
+                "type": "Fisico Puro",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Darius si lancia sul bersaglio infliggendo {int(280 * spell_mult)} danni. Se il colpo elimina il nemico, il mana si ricarica istantaneamente al 100%!"
+            },
+            "Ashe": {
+                "name": "Freccia di Cristallo",
+                "type": "Magico + Slow",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Ashe scocca una freccia di puro ghiaccio che infligge {int(200 * spell_mult)} danni e riduce la velocità d'attacco del bersaglio del 50%."
+            },
+            "Ahri": {
+                "name": "Sfera Mistica",
+                "type": "Magico",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Ahri lancia la sua sfera spirituale verso il bersaglio, infliggendo {int(190 * spell_mult)} danni magici."
+            },
+            "Vi": {
+                "name": "Pugno ad Impatto",
+                "type": "Fisico + Shockwave",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Vi carica i guanti Hextech e sferra un pugno devastante da {int(240 * spell_mult)} danni con onda d'urto."
+            },
+            "Zed": {
+                "name": "Marchio della Morte",
+                "type": "Fisico Critico",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Zed si teletrasporta istantaneamente alle spalle del nemico sferrando un fendente d'ombra critico da {int(290 * spell_mult)} danni."
+            },
+            "Braum": {
+                "name": "Scudo Indistruttibile",
+                "type": "Difesa & Scudo",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Braum solleva il suo massiccio portale di ghiaccio ottenendo uno Scudo di {int(450 * spell_mult)} HP e +30 Armatura."
+            },
+            "Ezreal": {
+                "name": "Colpo Mistico",
+                "type": "Magico + Buff AS",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Ezreal scaglia un dardo energetico da {int(270 * spell_mult)} danni e aumenta la propria Velocità d'Attacco del 35% per il resto del round."
+            },
+            "Jinx": {
+                "name": "Super Mega Razzo della Morte",
+                "type": "Fisico AoE",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Jinx spara un razzo gigante che infligge {int(340 * spell_mult)} danni al bersaglio primario e il 55% di danni ad area a tutti i nemici adiacenti."
+            },
+            "Riven": {
+                "name": "Lama dello Scudo",
+                "type": "Fisico & Barriera",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Riven attiva le rune della sua spada, ottenendo uno scudo da {int(220 * spell_mult)} HP e sferrando un fendente da {int(180 * spell_mult)} danni."
+            },
+            "Katarina": {
+                "name": "Loto Mortale",
+                "type": "Fisico Multi-Target",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Katarina scatena una tempesta di pugnali rotanti, colpendo fino a 3 nemici contemporaneamente per {int(240 * spell_mult)} danni ciascuno."
+            },
+            "Yasuo": {
+                "name": "Tempesta d'Acciaio",
+                "type": "Fisico a Cono",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Yasuo scaglia un vortice di vento a cono che travolge i nemici in linea infliggendo {int(260 * spell_mult)} danni."
+            },
+            "Shen": {
+                "name": "Rifugio Spirituale",
+                "type": "Scudo Protettivo AoE",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Shen crea una cupola spirituale che conferisce {int(320 * spell_mult)} Scudo a sé e {int(320 * spell_mult * 0.6)} Scudo a tutti gli alleati vicini."
+            },
+            "Kayle": {
+                "name": "Ascensione Divina",
+                "type": "Magico AoE & Cura",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Kayle fa piovere spade di luce sacra infliggendo {int(460 * spell_mult)} danni a tutti i nemici nell'area e curandosi di {int(250 * spell_mult)} HP."
+            },
+            "Lux": {
+                "name": "Scintilla Finale",
+                "type": "Magico a Tutta Mappa",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Lux canalizza un raggio laser arcobaleno gigante che attraversa l'intera scacchiera infliggendo {int(500 * spell_mult)} danni magici a tutti i nemici toccati."
+            },
+            "Sejuani": {
+                "name": "Prigione Glaciale",
+                "type": "Magico AoE & Congelamento",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Sejuani lancia una bufera di vero ghiaccio esplosiva che infligge {int(320 * spell_mult)} danni e riduce la velocità d'attacco nemica del 60%."
+            },
+            "Aurelion": {
+                "name": "Tempesta Stellare Cosmica",
+                "type": "Magico Globale",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Aurelion Sol chiama dal cosmo una pioggia di meteoriti che si abbatte su TUTTI i campioni nemici nell'arena infliggendo {int(420 * spell_mult)} danni ciascuno."
+            },
+            "Azir": {
+                "name": "Divisione Imperiale",
+                "type": "Magico a Falange",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Azir schiera una falange di soldati di sabbia dorata che carica in avanti travolgendo i nemici per {int(460 * spell_mult)} danni magici."
+            },
+            "Thresh": {
+                "name": "Condanna a Morte",
+                "type": "Gancio Spettrale & Scudo",
+                "cost": f"{self.mana_max} Mana",
+                "desc": f"Thresh lancia la sua catena spettrale verso il nemico più lontano, trascinandolo a sé per {int(440 * spell_mult)} danni e proteggendo gli alleati con +300 Scudo."
+            }
+        }
+        
+        return abilities.get(self.name, {
+            "name": "Attacco Speciale",
+            "type": "Speciale",
+            "cost": f"{self.mana_max} Mana",
+            "desc": f"Esegue la sua mossa speciale infliggendo {int(200 * spell_mult)} danni."
+        })
+        
     def get_sprite_surface(self, width=80, height=80):
         """Restituisce lo sprite del personaggio a figura intera orientato con eventuale hit-flash"""
         from asset_loader import get_champion_sprite

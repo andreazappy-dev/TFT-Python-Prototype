@@ -10,12 +10,14 @@ A standalone, fully modular 2D Auto-Battler engine written in Python and Pygame,
   <img src="battle.png" width="48%" alt="Real-Time Combat and Damage Meter" />
 </p>
 <p align="center">
-  <img src="carousel.png" width="48%" alt="Shared Carousel Draft Phase" />
+  <img src="inspector.png" width="48%" alt="Interactive Champion Inspector Card" />
   &nbsp;
-  <img src="augments.png" width="48%" alt="Hextech Augment Selection" />
+  <img src="carousel.png" width="48%" alt="Shared Carousel Draft Phase" />
 </p>
 <p align="center">
-  <img src="menu.png" width="60%" alt="Main Menu" />
+  <img src="augments.png" width="48%" alt="Hextech Augment Selection" />
+  &nbsp;
+  <img src="menu.png" width="48%" alt="Main Menu" />
 </p>
 
 ---

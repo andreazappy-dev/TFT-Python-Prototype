@@ -6,7 +6,7 @@ from config import (
     WIDTH, HEIGHT, GOLD, WHITE, BLACK, RED, GREEN, BLUE, LIGHT_BLUE,
     TEXT_FONT, SMALL_FONT, MICRO_FONT, HEADER_FONT, TITLE_FONT, BUTTON_FONT, draw_text
 )
-from items import get_random_component_key, get_item_data
+from items import get_random_component_key, get_item_data, draw_item_icon, get_item_icon_surface
 from asset_loader import get_background_image, draw_glass_panel, get_champion_sprite
 from battle_animations import Particle
 
@@ -28,35 +28,49 @@ class CarouselChampion:
         self.item_float_timer = random.uniform(0, 3.14)
         self.hitbox_radius = 34
 
-    def update(self, dt, center_x, center_y, rotation_speed):
+    @property
+    def claimed(self):
+        return self.is_claimed
+
+    @claimed.setter
+    def claimed(self, val):
+        self.is_claimed = val
+
+    def update(self, dt, center_x=None, center_y=None, rotation_speed=None):
         if self.is_claimed:
             return
-            
-        self.angle += rotation_speed * dt
-        self.x = center_x + math.cos(self.angle) * self.orbit_radius
-        self.y = center_y + math.sin(self.angle) * self.orbit_radius
-        self.item_float_timer += dt * 4.0
+        speed = rotation_speed if rotation_speed is not None else 0.35
+        self.angle += speed * dt
+        if center_x is not None and center_y is not None:
+            self.x = center_x + math.cos(self.angle) * self.orbit_radius
+            self.y = center_y + math.sin(self.angle) * self.orbit_radius
+        self.item_float_timer += dt * 3.5
 
-    def draw(self, surface):
+    def draw(self, surface, center_x=None, center_y=None):
         if self.is_claimed:
             return
 
-        cx, cy = int(self.x), int(self.y)
-        
-        # 1. Ombra realistica al suolo
-        shadow_surf = pygame.Surface((56, 16), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_surf, (5, 8, 14, 160), (0, 0, 56, 16))
-        surface.blit(shadow_surf, (cx - 28, cy + 20))
+        if center_x is not None and center_y is not None:
+            cx = center_x + math.cos(self.angle) * self.orbit_radius
+            cy = center_y + math.sin(self.angle) * self.orbit_radius
+            self.x = cx
+            self.y = cy
+        else:
+            cx, cy = int(self.x), int(self.y)
 
-        # 2. Cerchio magico sotto il campione (Aura colorata in base al costo)
-        tier_col = getattr(self.champion, "tier_color", GOLD)
-        halo_surf = pygame.Surface((60, 20), pygame.SRCALPHA)
-        pygame.draw.ellipse(halo_surf, (*tier_col[:3], 150), (0, 0, 60, 20), width=2)
-        surface.blit(halo_surf, (cx - 30, cy + 18))
+        # 1. Ombra ed Halo sul terreno
+        shadow_surf = pygame.Surface((60, 20), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow_surf, (5, 8, 14, 160), (0, 0, 60, 20))
+        surface.blit(shadow_surf, (cx - 30, cy + 18))
 
-        # 3. Sprite 2D del Campione
-        # Orienta lo sprite in base alla direzione di rotazione tangenziale
-        facing_right = math.sin(self.angle) < 0
+        # 2. Halo Sottostante del Tier
+        tier_col = getattr(self.champion, 'tier_color', (160, 160, 160))
+        halo_surf = pygame.Surface((64, 22), pygame.SRCALPHA)
+        pygame.draw.ellipse(halo_surf, (*tier_col[:3], 180), (0, 0, 64, 22), width=2)
+        surface.blit(halo_surf, (cx - 32, cy + 17))
+
+        # 3. Sprite 2D del Personaggio
+        facing_right = math.cos(self.angle + math.pi / 2) >= 0
         sprite = get_champion_sprite(self.champion.name, width=76, height=76, flip_x=not facing_right)
         surface.blit(sprite, (cx - 38, cy - 38))
 
@@ -76,13 +90,9 @@ class CarouselChampion:
         pygame.draw.circle(item_halo, (*item_col[:3], pulse_alpha), (22, 22), 18)
         surface.blit(item_halo, (cx - 22, int(item_y - 22)))
 
-        # Box icona dell'oggetto
-        item_box = pygame.Rect(cx - 13, int(item_y - 13), 26, 26)
-        pygame.draw.rect(surface, (12, 16, 26), item_box, border_radius=7)
-        pygame.draw.rect(surface, item_col, item_box, width=2, border_radius=7)
-        
-        tag_text = self.item_data.get("tag", "ITM")
-        draw_text(tag_text[:3], pygame.font.SysFont("Arial", 10, bold=True), item_col, surface, item_box.centerx, item_box.centery)
+        # Icona Grafica Reale dell'Oggetto
+        item_box = pygame.Rect(cx - 14, int(item_y - 14), 28, 28)
+        draw_item_icon(surface, self.item_key, item_box)
 
 
 class CarouselAvatar:
