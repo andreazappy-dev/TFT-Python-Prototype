@@ -72,6 +72,7 @@ class BattleManager:
         self.is_over = False
         self.winner = None
         self.clock = pygame.time.Clock()
+        self.inspected_champion = None
 
     def apply_augment_buffs(self):
         augments = getattr(self.game, 'player_augments', [])
@@ -580,3 +581,35 @@ class BattleManager:
                 popup["timer"] -= self.clock.get_time() / 1000.0
                 if popup["timer"] <= 0:
                     champ.damage_popup_texts.remove(popup)
+
+        # 12. Scheda Dettaglio / Ispettore Campione (se attivo)
+        if self.inspected_champion and hasattr(self.game, 'shop_manager'):
+            self.game.shop_manager.draw_champion_inspector(surface, self.inspected_champion)
+
+    def handle_event(self, event):
+        mouse_pos = pygame.mouse.get_pos()
+        
+        if self.inspected_champion:
+            if event.type == pygame.KEYDOWN and event.key in [pygame.K_ESCAPE, pygame.K_SPACE]:
+                self.inspected_champion = None
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                sm = getattr(self.game, 'shop_manager', None)
+                if sm:
+                    if sm.inspector_close_rect.collidepoint(mouse_pos) or not sm.inspector_rect.collidepoint(mouse_pos):
+                        self.inspected_champion = None
+                        return
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                sm = getattr(self.game, 'shop_manager', None)
+                if sm and not sm.inspector_rect.collidepoint(mouse_pos):
+                    self.inspected_champion = None
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+            # Click destro su un campione in combattimento per ispezionarlo
+            for champ in self.all_champs:
+                if champ.is_alive():
+                    dist = ((champ.x - mouse_pos[0]) ** 2 + (champ.y - mouse_pos[1]) ** 2) ** 0.5
+                    if dist <= 42:
+                        self.inspected_champion = champ
+                        return

@@ -34,6 +34,9 @@ class ShopManager:
         self.refresh_button_rect = pygame.Rect(screen_width//2 - 120, screen_height - 68, 180, 48)
         self.confirm_button_rect = pygame.Rect(screen_width//2 + 80, screen_height - 68, 220, 48)
         
+        # Area Cestino di Vendita Dinamica (stile TFT durante il drag)
+        self.sell_zone_rect = pygame.Rect(screen_width//2 - 240, screen_height - 68, 480, 48)
+        
         self.buy_buttons = []
 
         # --- Aggiunte per Drag & Drop ---
@@ -247,17 +250,23 @@ class ShopManager:
         return True
 
     def handle_event(self, event):
-        mouse_pos = pygame.mouse.get_pos()
+        mouse_pos = getattr(event, 'pos', pygame.mouse.get_pos())
         
-        # Chiusura Ispettore con ESC o Spazio
+        # 1. Chiusura Ispettore (se aperto)
         if self.inspected_champion:
             if event.type == pygame.KEYDOWN and event.key in [pygame.K_ESCAPE, pygame.K_SPACE]:
                 self.inspected_champion = None
                 return
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # Se clicca sulla "✕" o fuori dal modal, chiudi l'ispettore
                 if self.inspector_close_rect.collidepoint(mouse_pos) or not self.inspector_rect.collidepoint(mouse_pos):
                     self.inspected_champion = None
                     return
+                # Clic all'interno dell'ispettore -> assorbi l'evento
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                if not self.inspector_rect.collidepoint(mouse_pos):
+                    self.inspected_champion = None
 
         if hasattr(self.game, 'damage_meter') and self.game.damage_meter.handle_event(event):
             return
@@ -267,7 +276,7 @@ class ShopManager:
             self.scroll_y = max(-350, min(0, self.scroll_y)) 
             return 
         
-        # Dropping Oggetti su Campioni
+        # --- RILASCIO OGGETTI SUI CAMPIONI (MOUSEBUTTONUP) ---
         if self.is_dragging_item and event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             self.is_dragging_item = False
             board_rects = self.get_board_rects()
@@ -300,13 +309,21 @@ class ShopManager:
             self.dragged_item_key = None
             return
 
+        # --- RILASCIO CAMPIONI DRAGGATI (MOUSEBUTTONUP) ---
         if self.is_dragging and event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            self.is_dragging = False
-            
+            # 1. RILASCIO SUL CESTINO DI VENDITA
+            if self.sell_zone_rect.collidepoint(mouse_pos):
+                self.sell_champion(self.dragged_champ)
+                self.is_dragging = False
+                self.dragged_champ = None
+                self.dragged_from_list = None
+                self.dragged_from_index = -1
+                return
+
             board_rects = self.get_board_rects()
             bench_rects = self.get_bench_rects()
             
-            # Dropping on BOARD
+            # 2. Rilascio su BOARD
             for i, rect in enumerate(board_rects):
                 if rect.collidepoint(mouse_pos):
                     # Controllo limite di campioni attivi
@@ -319,20 +336,33 @@ class ShopManager:
                     self.place_champ_in_list(self.game.board, i)
                     return
             
-            # Dropping on BENCH
+            # 3. Rilascio su BENCH
             for i, rect in enumerate(bench_rects):
                 if rect.collidepoint(mouse_pos):
                     self.place_champ_in_list(self.game.bench, i)
                     return
 
+            # 4. Fallback sicuro: se mollato nel vuoto, torna SEMPRE al suo posto originale!
             self.return_dragged_champ()
             return
 
+        # --- GESTIONE CLICK DEL MOUSE ---
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 3: # Click destro per ispezionare / vendere
+            # === TASTO DESTRO (BUTTON 3): SOLO ED ESCLUSIVAMENTE ISPEZIONE SCHEDA ===
+            if event.button == 3:
+                # Ispezione carte nello Shop
+                for i, champ in enumerate(self.shop_champs):
+                    if champ:
+                        x = 215 + i * self.spacing_x
+                        y = self.margin_y + self.scroll_y
+                        card_rect = pygame.Rect(x, y, *self.card_size)
+                        if card_rect.collidepoint(mouse_pos):
+                            self.inspected_champion = champ
+                            return
+
+                # Ispezione campioni su Board o Bench
                 board_rects = self.get_board_rects()
                 bench_rects = self.get_bench_rects()
-                
                 for i, rect in enumerate(board_rects):
                     if rect.collidepoint(mouse_pos) and self.game.board[i]:
                         self.inspected_champion = self.game.board[i]
@@ -343,7 +373,9 @@ class ShopManager:
                         return 
                 return 
 
+            # === TASTO SINISTRO (BUTTON 1): ACQUISTO, PULSANTI E SPOSTAMENTO (DRAG) ===
             if event.button == 1:
+                # Bottoni UI
                 if self.refresh_button_rect.collidepoint(mouse_pos):
                     self.roll_shop()
                     return
@@ -354,22 +386,12 @@ class ShopManager:
                     self.game.start_battle()
                     return
                     
-                # Click sulle Card dello Shop
+                # Click sulle Card dello Shop (Acquisto)
                 for i, rect in enumerate(self.buy_buttons):
                     if rect.collidepoint(mouse_pos):
                         if self.shop_champs[i]:
                             self.buy_champion(self.shop_champs[i], i)
                         return
-
-                # Click per ispezionare una carta nello Shop
-                for i, champ in enumerate(self.shop_champs):
-                    if champ:
-                        x = 215 + i * self.spacing_x
-                        y = self.margin_y + self.scroll_y
-                        card_rect = pygame.Rect(x, y, *self.card_size)
-                        if card_rect.collidepoint(mouse_pos):
-                            self.inspected_champion = champ
-                            return
                 
                 # Inizia DRAG OGGETTI
                 item_rects = self.get_item_bench_rects()
@@ -380,22 +402,22 @@ class ShopManager:
                         self.dragged_item_key = self.game.player_items[i]
                         return
 
-                # Inizia DRAG CAMPIONI & Ispezione
+                # Inizia DRAG CAMPIONI (NESSUNA APERTURA ISPETTORE SU CLICK SINISTRO)
                 board_rects = self.get_board_rects()
                 bench_rects = self.get_bench_rects()
                 
                 for i, rect in enumerate(board_rects):
                     if rect.collidepoint(mouse_pos) and self.game.board[i]:
-                        self.inspected_champion = self.game.board[i]
                         self.start_dragging(self.game.board, i)
                         return
                 for i, rect in enumerate(bench_rects):
                     if rect.collidepoint(mouse_pos) and self.game.bench[i]:
-                        self.inspected_champion = self.game.bench[i]
                         self.start_dragging(self.game.bench, i)
                         return
     
     def sell_champion(self, champion):
+        if not champion:
+            return
         level = getattr(champion, 'level', 1)
         cost = getattr(champion, 'cost', 1)
         
@@ -405,10 +427,11 @@ class ShopManager:
         self.game.player_gold += sell_price
         if hasattr(self.game, 'audio'):
             self.game.audio.play_sfx("sell")
-        print(f"Venduto {champion.name} Lvl {level} per {sell_price}g.")
+        print(f"💰 VENDUTO {champion.name} (★{level}) per +{sell_price} Oro!")
 
     def start_dragging(self, from_list, index):
-        if self.is_dragging: return 
+        if self.is_dragging or from_list[index] is None:
+            return 
         
         self.dragged_champ = from_list[index]
         from_list[index] = None 
@@ -417,21 +440,30 @@ class ShopManager:
         self.is_dragging = True
 
     def place_champ_in_list(self, target_list, target_index):
-        # Se lo slot è occupato, facciamo swap
+        if not self.dragged_champ or self.dragged_from_list is None:
+            self.is_dragging = False
+            self.dragged_champ = None
+            return
+
+        # Se lo slot è occupato, esegui lo scambio
         champ_in_slot = target_list[target_index]
         target_list[target_index] = self.dragged_champ
         self.dragged_from_list[self.dragged_from_index] = champ_in_slot
             
         self.is_dragging = False
         self.dragged_champ = None
+        self.dragged_from_list = None
+        self.dragged_from_index = -1
         if hasattr(self.game, 'audio'):
             self.game.audio.play_sfx("drop_token")
 
     def return_dragged_champ(self):
-        if self.dragged_champ:
+        if self.dragged_champ and self.dragged_from_list is not None and self.dragged_from_index >= 0:
             self.dragged_from_list[self.dragged_from_index] = self.dragged_champ
         self.is_dragging = False
         self.dragged_champ = None
+        self.dragged_from_list = None
+        self.dragged_from_index = -1
 
     def get_board_rects(self):
         rects = []
@@ -714,30 +746,47 @@ class ShopManager:
                 
                 self.draw_champ_items(surface, champ, rect.centerx, rect.centery + 14)
 
-        # --- 7. UI BASSA (BOTTONI CURVI SPAZIATI CORRETTAMENTE) ---
-        # Bottone Compra XP
-        can_xp = self.game.player_gold >= 4 and self.game.player_level < 9
-        xp_hover = self.buy_xp_button_rect.collidepoint(mouse_pos)
-        x_color = (35, 140, 240) if xp_hover and can_xp else ((25, 105, 195) if can_xp else (50, 52, 60))
-        pygame.draw.rect(surface, x_color, self.buy_xp_button_rect, border_radius=24)
-        pygame.draw.rect(surface, (100, 200, 255) if can_xp else (70, 75, 85), self.buy_xp_button_rect, width=2, border_radius=24)
-        draw_text("COMPRA XP (4g)", BUTTON_FONT, WHITE if can_xp else (150, 150, 150), surface, self.buy_xp_button_rect.centerx, self.buy_xp_button_rect.centery)
+        # --- 7. UI BASSA (BOTTONI O CESTINO DI VENDITA DURANTE IL DRAG) ---
+        if self.is_dragging and self.dragged_champ:
+            # Mostra Cestino di Vendita Dinamico stile TFT
+            level = getattr(self.dragged_champ, 'level', 1)
+            cost = getattr(self.dragged_champ, 'cost', 1)
+            total_invested = cost * (3 ** (level - 1))
+            sell_price = total_invested if level == 1 else max(1, total_invested - 1)
+            
+            is_sell_hover = self.sell_zone_rect.collidepoint(mouse_pos)
+            bg_sell = (120, 25, 35, 240) if is_sell_hover else (60, 18, 25, 230)
+            border_sell = (255, 90, 100) if is_sell_hover else (220, 70, 80)
+            
+            draw_glass_panel(surface, self.sell_zone_rect, border_radius=24, bg_color=bg_sell, border_color=border_sell, border_width=2 if is_sell_hover else 1)
+            
+            sell_font = pygame.font.SysFont("Arial", 16, bold=True)
+            sell_txt = f"🗑️ RILASCIA QUI PER VENDERE (+{sell_price} ORO)"
+            draw_text(sell_txt, sell_font, (255, 235, 140) if is_sell_hover else (255, 200, 205), surface, self.sell_zone_rect.centerx, self.sell_zone_rect.centery)
+        else:
+            # Bottone Compra XP
+            can_xp = self.game.player_gold >= 4 and self.game.player_level < 9
+            xp_hover = self.buy_xp_button_rect.collidepoint(mouse_pos)
+            x_color = (35, 140, 240) if xp_hover and can_xp else ((25, 105, 195) if can_xp else (50, 52, 60))
+            pygame.draw.rect(surface, x_color, self.buy_xp_button_rect, border_radius=24)
+            pygame.draw.rect(surface, (100, 200, 255) if can_xp else (70, 75, 85), self.buy_xp_button_rect, width=2, border_radius=24)
+            draw_text("COMPRA XP (4g)", BUTTON_FONT, WHITE if can_xp else (150, 150, 150), surface, self.buy_xp_button_rect.centerx, self.buy_xp_button_rect.centery)
 
-        # Bottone Reroll
-        reroll_hover = self.refresh_button_rect.collidepoint(mouse_pos)
-        can_reroll = self.game.player_gold >= 2
-        r_color = (210, 140, 20) if reroll_hover and can_reroll else ((170, 110, 15) if can_reroll else (50, 52, 60))
-        pygame.draw.rect(surface, r_color, self.refresh_button_rect, border_radius=24)
-        pygame.draw.rect(surface, (255, 210, 80) if can_reroll else (70, 75, 85), self.refresh_button_rect, width=2, border_radius=24)
-        draw_text("REROLL (2g)", BUTTON_FONT, WHITE if can_reroll else (150, 150, 150), surface, self.refresh_button_rect.centerx, self.refresh_button_rect.centery)
+            # Bottone Reroll
+            reroll_hover = self.refresh_button_rect.collidepoint(mouse_pos)
+            can_reroll = self.game.player_gold >= 2
+            r_color = (210, 140, 20) if reroll_hover and can_reroll else ((170, 110, 15) if can_reroll else (50, 52, 60))
+            pygame.draw.rect(surface, r_color, self.refresh_button_rect, border_radius=24)
+            pygame.draw.rect(surface, (255, 210, 80) if can_reroll else (70, 75, 85), self.refresh_button_rect, width=2, border_radius=24)
+            draw_text("REROLL (2g)", BUTTON_FONT, WHITE if can_reroll else (150, 150, 150), surface, self.refresh_button_rect.centerx, self.refresh_button_rect.centery)
 
-        # Bottone Inizia Battaglia
-        can_confirm = active_count > 0 
-        btn_hover = self.confirm_button_rect.collidepoint(mouse_pos)
-        c_color = (35, 185, 85) if btn_hover and can_confirm else ((25, 145, 65) if can_confirm else (50, 52, 60))
-        pygame.draw.rect(surface, c_color, self.confirm_button_rect, border_radius=24)
-        pygame.draw.rect(surface, (120, 255, 160) if can_confirm else (70, 75, 85), self.confirm_button_rect, width=2, border_radius=24)
-        draw_text("COMBATTI", BUTTON_FONT, WHITE if can_confirm else (150, 150, 150), surface, self.confirm_button_rect.centerx, self.confirm_button_rect.centery)
+            # Bottone Inizia Battaglia
+            can_confirm = active_count > 0 
+            btn_hover = self.confirm_button_rect.collidepoint(mouse_pos)
+            c_color = (35, 185, 85) if btn_hover and can_confirm else ((25, 145, 65) if can_confirm else (50, 52, 60))
+            pygame.draw.rect(surface, c_color, self.confirm_button_rect, border_radius=24)
+            pygame.draw.rect(surface, (120, 255, 160) if can_confirm else (70, 75, 85), self.confirm_button_rect, width=2, border_radius=24)
+            draw_text("COMBATTI", BUTTON_FONT, WHITE if can_confirm else (150, 150, 150), surface, self.confirm_button_rect.centerx, self.confirm_button_rect.centery)
 
         # --- 8. BANCO INVENTARIO OGGETTI (CURVO GLASSMORPHISM) ---
         item_box_rect = pygame.Rect(12, HEIGHT - 118 + self.scroll_y, 200, 100)
