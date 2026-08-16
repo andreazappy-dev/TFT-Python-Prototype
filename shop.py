@@ -650,7 +650,7 @@ class ShopManager:
                 draw_glass_panel(surface, card_rect, border_radius=12, bg_color=(18, 22, 32, 160), border_color=(40, 48, 60, 140), border_width=1)
                 self.buy_buttons.append(pygame.Rect(0,0,0,0)) 
 
-        # --- 4. PANNELLO SINERGIE & AUGMENTS (LATO SINISTRO, ZERO OVERLAP) ---
+        # --- 4. PANNELLO SINERGIE & AUGMENTS & DAMAGE METER (LATO SINISTRO CON SPAZIATURA EXTRA) ---
         bonus_traits = []
         player_augments = getattr(self.game, 'player_augments', [])
         if "demacia_crown" in player_augments:
@@ -666,16 +666,17 @@ class ShopManager:
         draw_hud_augments(surface, mouse_pos, player_augments, start_x=20, start_y=14)
         draw_traits_sidebar(surface, active_traits, start_x=20, start_y=54)
         
-        # --- CLASSIFICA LOBBY & DAMAGE METER (LATO DESTRO, ZERO OVERLAP) ---
-        if hasattr(self.game, 'lobby_manager'):
-            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=sw - 215, start_y=14)
-            
+        # Damage Meter sotto alle Sinergie a sinistra con spazio extra
         if hasattr(self.game, 'damage_meter') and getattr(self.game, 'last_battle_player_team', None):
             self.game.damage_meter.draw(
                 surface, mouse_pos, self.game.last_battle_player_team, 
                 elapsed_seconds=getattr(self.game, 'last_battle_duration', 5.0), 
-                start_x=sw - 215, start_y=345
+                start_x=20, start_y=290
             )
+        
+        # --- CLASSIFICA LOBBY (LATO DESTRO, ABBASSATA A Y=52 PER LASCIARE SPAZIO IN ALTO) ---
+        if hasattr(self.game, 'lobby_manager'):
+            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=sw - 215, start_y=52)
 
         # --- 5. SCACCHIERA (7x2 CELLE TRASLUCIDE) ---
         active_count = sum(1 for c in self.game.board if c is not None)

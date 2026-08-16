@@ -462,16 +462,18 @@ class BattleManager:
         head_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 15, bold=True)
         draw_text(f"VS {self.opponent_name.upper()} - SCONTRO IN CORSO", head_font, GOLD, surface, head_rect.centerx, head_rect.centery)
         
-        # 3. Sidebar Sinergie a sinistra & Classifica a destra & Damage Meter (ZERO OVERLAP)
+        # 3. Sidebar Sinistra (Augments, Sinergie, Damage Meter) & Sidebar Destra (Classifica)
         mouse_pos = pygame.mouse.get_pos()
         draw_hud_augments(surface, mouse_pos, getattr(self.game, 'player_augments', []), start_x=20, start_y=14)
         draw_traits_sidebar(surface, getattr(self, "player_traits", []), start_x=20, start_y=54)
         
-        if hasattr(self.game, 'lobby_manager'):
-            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=sw - 215, start_y=14)
-        
+        # Damage Meter posizionato sotto le sinergie a sinistra
         elapsed_sec = max(0.5, (pygame.time.get_ticks() - self.battle_start_ticks) / 1000.0)
-        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=sw - 215, start_y=345)
+        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=20, start_y=290)
+        
+        # Classifica a destra abbassata a start_y=52 per lasciare spazio in alto
+        if hasattr(self.game, 'lobby_manager'):
+            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=sw - 215, start_y=52)
         
         # 4. Campo di battaglia a griglia (7x4)
         cell_w, cell_h = 92, 92

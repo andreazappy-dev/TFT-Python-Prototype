@@ -175,11 +175,13 @@ class Game:
             elif self.game_state == "RESULT":
                 self.draw_result_screen()
                 
-            # Indicatore Audio & Schermo Intero in alto a destra
+            # Indicatore Audio & Schermo Intero in alto a destra (Pillola elegante y=14..40)
             sw = self.screen.get_width()
-            audio_status = "MUTATO (M)" if self.audio.is_muted else "ATTIVO (M)"
+            top_status_rect = pygame.Rect(sw - 215, 14, 195, 26)
+            draw_glass_panel(self.screen, top_status_rect, border_radius=13, bg_color=(14, 18, 28, 230), border_color=(70, 85, 110, 160), border_width=1)
+            audio_status = "MUTATO" if self.audio.is_muted else "ATTIVO"
             audio_color = (255, 100, 100) if self.audio.is_muted else (120, 220, 120)
-            draw_text(f"AUDIO: {audio_status}  |  SCHERMO INTERO: [F11/F]", SMALL_FONT, audio_color, self.screen, sw - 140, 18)
+            draw_text(f"AUDIO: {audio_status} (M) | [F11] FULL", MICRO_FONT, audio_color, self.screen, top_status_rect.centerx, top_status_rect.centery)
             
             pygame.display.flip()
             self.clock.tick(60)

@@ -41,26 +41,35 @@ class DamageMeter:
     def draw(self, surface, mouse_pos, champions_team, elapsed_seconds=1.0, start_x=None, start_y=None):
         """
         Disegna il pannello Glassmorphic del Damage Meter con barre bicolore proporzionali e DPS.
+        Posizionato a sinistra sotto le Sinergie con icona vettoriale nativa.
         """
         if not champions_team:
             return
 
         panel_w = 195
         valid_champs = [c for c in champions_team if c is not None]
-        panel_h = min(300, 48 + len(valid_champs) * 32)
-        px = start_x if start_x is not None else (surface.get_width() - panel_w - 20)
-        py = start_y if start_y is not None else 345
+        panel_h = min(220, 48 + len(valid_champs) * 32)
+        px = start_x if start_x is not None else 20
+        py = start_y if start_y is not None else 290
         
-        # 1. Pulsante Toggle compatto
-        self.toggle_btn_rect = pygame.Rect(px, py - 28, 100, 22)
+        # 1. Pulsante Toggle compatto con icona istogramma vettoriale
+        self.toggle_btn_rect = pygame.Rect(px, py - 26, 125, 22)
         btn_hover = self.toggle_btn_rect.collidepoint(mouse_pos)
         btn_bg = (24, 32, 48, 230) if btn_hover else (14, 18, 28, 200)
         pygame.draw.rect(surface, btn_bg, self.toggle_btn_rect, border_radius=11)
         pygame.draw.rect(surface, GOLD if self.is_visible else (120, 130, 150), self.toggle_btn_rect, width=1, border_radius=11)
         
+        # Disegna 3 barre istogramma geometriche vettoriali
+        icon_col = GOLD if self.is_visible else (150, 160, 180)
+        ix = self.toggle_btn_rect.x + 10
+        iy = self.toggle_btn_rect.centery
+        pygame.draw.rect(surface, icon_col, (ix, iy + 1, 3, 5))
+        pygame.draw.rect(surface, icon_col, (ix + 4, iy - 2, 3, 8))
+        pygame.draw.rect(surface, icon_col, (ix + 8, iy - 5, 3, 11))
+        
         toggle_label = "DANNI [TAB]" if self.is_visible else "MOSTRA [TAB]"
         btn_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 10, bold=True)
-        draw_text(toggle_label, btn_font, GOLD if self.is_visible else (190, 200, 220), surface, self.toggle_btn_rect.centerx, self.toggle_btn_rect.centery)
+        draw_text(toggle_label, btn_font, GOLD if self.is_visible else (190, 200, 220), surface, self.toggle_btn_rect.centerx + 8, self.toggle_btn_rect.centery)
         
         if not self.is_visible:
             return

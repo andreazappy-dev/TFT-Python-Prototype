@@ -33,10 +33,26 @@ MICRO_FONT = get_font(10, bold=True)
 
 # --- Funzioni Helper Grafiche ---
 def draw_text(text, font, color, surface, x, y, center=True):
-    """ Funzione helper per disegnare testo centrato o allineato a sinistra in modo sicuro. """
+    """ Funzione helper per disegnare testo pulito con antialiasing garantito senza tofu box. """
     try:
-        # Pulisce eventuali caratteri unicode non supportati
-        clean_text = str(text).replace("•", "-").replace("✨", "").replace("🗑️", "").replace("★", "")
+        clean_text = (str(text)
+            .replace("•", "-")
+            .replace("✨", "")
+            .replace("🗑️", "")
+            .replace("★", "")
+            .replace("📊", "")
+            .replace("💰", "")
+            .replace("💀", "")
+            .replace("🏆", "")
+            .replace("⚡", "")
+            .replace("🎲", "")
+            .replace("🎁", "")
+            .replace("🌱", "")
+            .replace("🎟️", "")
+            .replace("⚔️", "")
+            .replace("🛡️", "")
+            .replace("💎", "")
+        )
         text_obj = font.render(clean_text, True, color)
         text_rect = text_obj.get_rect()
         if center:

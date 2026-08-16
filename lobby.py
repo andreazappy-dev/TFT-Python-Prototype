@@ -247,9 +247,10 @@ class LobbyManager:
         
         return all_players
 
-    def draw_leaderboard_sidebar(self, surface, mouse_pos, start_x=None, start_y=14):
+    def draw_leaderboard_sidebar(self, surface, mouse_pos, start_x=None, start_y=52):
         """
         Disegna la colonna della classifica a destra con barre HP dinamiche, nomi, streak e tooltip all'hover.
+        Posizionata a start_y=52 per lasciare spazio all'indicatore di stato in alto a destra.
         """
         players = self.get_leaderboard()
         
