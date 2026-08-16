@@ -23,10 +23,29 @@ from damage_meter import DamageMeter
 # --- Inizializzazione Audio ---
 audio_manager = AudioManager.get_instance()
 
-# --- Inizializzazione Pygame ---
+# --- Inizializzazione Pygame & Display Scaling Dinamico ---
 pygame.init()
-SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
+
+# Rilevamento risoluzione display reale del monitor (Mac / Windows / Linux)
+_info = pygame.display.Info()
+_mon_w = _info.current_w if _info.current_w > 0 else WIDTH
+_mon_h = _info.current_h if _info.current_h > 0 else HEIGHT
+
+# All'avvio occupa l'intero spazio del monitor mantenendo la finestra ridimensionabile
+SCREEN_FLAGS = pygame.RESIZABLE
+DISPLAY_SCREEN = pygame.display.set_mode((_mon_w, _mon_h), SCREEN_FLAGS)
 pygame.display.set_caption("Mini TFT - 8-Player Lobby Battle Royale")
+
+# Hook trasparente per pygame.mouse.get_pos (mappatura automatica su canvas virtuale 1920x1080)
+_orig_pygame_mouse_get_pos = pygame.mouse.get_pos
+
+def _hooked_mouse_get_pos():
+    pos = _orig_pygame_mouse_get_pos()
+    if Game._instance is not None:
+        return Game._instance.to_virtual_pos(pos)
+    return pos
+
+pygame.mouse.get_pos = _hooked_mouse_get_pos
 
 
 # --- CLASSE PRINCIPALE DEL GIOCO ---
@@ -35,11 +54,18 @@ class Game:
     """
     Classe principale che gestisce il ciclo di gioco, gli stati,
     l'economia e orchestra Shop, Battaglia e Lobby 8 Giocatori.
+    Supporta Virtual Resolution Canvas Scaling su qualsiasi schermo.
     """
+    _instance = None
+
     def __init__(self):
-        self.screen = SCREEN
+        Game._instance = self
+        self.display_screen = DISPLAY_SCREEN
+        self.virtual_screen = pygame.Surface((WIDTH, HEIGHT))
+        self.screen = self.virtual_screen # Consente il rendering trasparente 1920x1080 in tutti i moduli
         self.clock = pygame.time.Clock()
         self.running = True
+        self.is_fullscreen = False
         self.game_state = "MAIN_MENU" # "MAIN_MENU", "SHOP", "BATTLE", "RESULT"
         
         # Inizializza il database dei campioni
@@ -96,25 +122,64 @@ class Game:
         self.continue_button_rect = pygame.Rect(WIDTH // 2 - 140, HEIGHT // 2 + 135, 280, 52)
         self.audio.play_music("shop_theme")
 
+    def get_scale_and_offset(self):
+        """ Calcola il fattore di scala uniforme e i margini di centratura (Letterbox/Pillarbox) """
+        dw, dh = self.display_screen.get_size()
+        scale = min(dw / WIDTH, dh / HEIGHT)
+        scaled_w = int(WIDTH * scale)
+        scaled_h = int(HEIGHT * scale)
+        offset_x = (dw - scaled_w) // 2
+        offset_y = (dh - scaled_h) // 2
+        return scale, offset_x, offset_y, scaled_w, scaled_h
+
+    def to_virtual_pos(self, physical_pos):
+        """ Converte coordinate pixel dello schermo fisico in coordinate virtuali 1920x1080 """
+        scale, offset_x, offset_y, _, _ = self.get_scale_and_offset()
+        if scale <= 0:
+            return physical_pos
+        vx = int((physical_pos[0] - offset_x) / scale)
+        vy = int((physical_pos[1] - offset_y) / scale)
+        vx = max(0, min(WIDTH - 1, vx))
+        vy = max(0, min(HEIGHT - 1, vy))
+        return (vx, vy)
+
+    def toggle_fullscreen(self):
+        """ Alterna tra Schermo Intero reale e Finestra Massimizzata """
+        self.is_fullscreen = not self.is_fullscreen
+        if self.is_fullscreen:
+            self.display_screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        else:
+            info = pygame.display.Info()
+            w = max(1280, int(info.current_w * 0.95))
+            h = max(720, int(info.current_h * 0.95))
+            self.display_screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
+
     def run(self):
-        """ Il loop di gioco principale, non bloccante. """
-        
-        # if not pygame.mixer.music.get_busy():
-        #     try:
-        #         pygame.mixer.music.play(-1)
-        #     except Exception as e:
-        #         print(f"Errore play musica: {e}")
-            
+        """ Il loop di gioco principale, con Virtual Canvas Scaling e resa grafica fluida a 60 FPS. """
         while self.running:
             # 1. Gestisci Eventi
             events = pygame.event.get()
             for event in events:
                 if event.type == pygame.QUIT:
                     self.running = False
+                elif event.type == pygame.VIDEORESIZE:
+                    self.display_screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_m:
                         self.audio.toggle_mute()
+                    elif event.key in [pygame.K_F11, pygame.K_f]:
+                        self.toggle_fullscreen()
                     
+                # Converti coordinate fisiche del mouse in coordinate virtuali 1920x1080
+                if hasattr(event, 'pos'):
+                    vpos = self.to_virtual_pos(event.pos)
+                    try:
+                        event.pos = vpos
+                    except Exception:
+                        pass
+                    if hasattr(event, 'dict') and 'pos' in event.dict:
+                        event.dict['pos'] = vpos
+
                 if self.game_state == "MAIN_MENU":
                     self.handle_menu_events(event)
                 elif self.game_state == "CAROUSEL" and self.carousel_manager:
@@ -136,32 +201,42 @@ class Game:
                 if self.battle_manager.is_over:
                     self.end_battle(self.battle_manager.winner)
 
-            # 3. Disegna (Render)
-            self.screen.fill((20, 20, 20))
+            # 3. Disegna sulla Virtual Canvas (1920x1080)
+            self.virtual_screen.fill((10, 14, 22))
             
             if self.game_state == "MAIN_MENU":
                 self.audio.play_music("shop_theme")
                 self.draw_main_menu()
             elif self.game_state == "CAROUSEL" and self.carousel_manager:
                 self.audio.play_music("shop_theme")
-                self.carousel_manager.draw(self.screen)
+                self.carousel_manager.draw(self.virtual_screen)
             elif self.game_state == "AUGMENT_SELECTION":
                 self.audio.play_music("shop_theme")
                 self.draw_augment_selection()
             elif self.game_state == "SHOP":
                 self.audio.play_music("shop_theme")
-                self.shop_manager.draw(self.screen)
+                self.shop_manager.draw(self.virtual_screen)
             elif self.game_state == "BATTLE" and self.battle_manager:
                 self.audio.play_music("battle_theme")
-                self.battle_manager.draw(self.screen)
+                self.battle_manager.draw(self.virtual_screen)
             elif self.game_state == "RESULT":
                 self.draw_result_screen()
                 
-            # Indicatore Audio in alto
+            # Indicatore Audio & Schermo Intero in alto
             audio_status = "MUTATO (M)" if self.audio.is_muted else "ATTIVO (M)"
             audio_color = (255, 100, 100) if self.audio.is_muted else (120, 220, 120)
-            draw_text(f"AUDIO: {audio_status}", SMALL_FONT, audio_color, self.screen, WIDTH - 100, 18)
+            draw_text(f"AUDIO: {audio_status}  |  SCHERMO INTERO: [F11/F]", SMALL_FONT, audio_color, self.virtual_screen, WIDTH - 180, 18)
             
+            # 4. Smoothscale & Presentazione sullo schermo reale
+            scale, offset_x, offset_y, scaled_w, scaled_h = self.get_scale_and_offset()
+            self.display_screen.fill((5, 7, 12))
+            
+            if scaled_w == WIDTH and scaled_h == HEIGHT and offset_x == 0 and offset_y == 0:
+                self.display_screen.blit(self.virtual_screen, (0, 0))
+            else:
+                scaled_surf = pygame.transform.smoothscale(self.virtual_screen, (scaled_w, scaled_h))
+                self.display_screen.blit(scaled_surf, (offset_x, offset_y))
+
             pygame.display.flip()
             self.clock.tick(60)
         
