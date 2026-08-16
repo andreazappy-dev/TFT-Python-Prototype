@@ -212,14 +212,16 @@ class BotPlayer:
 
     def assign_tactical_positions(self):
         """
-        Assegna le posizioni dei campioni sulla griglia nemica 7x2:
-        - Row 1 (Indici 7..13 - Prima Linea): Tank, Cavalieri, Guardiani, Picchiatori
-        - Row 0 (Indici 0..6 - Retroguardia): Cecchini, Maghi, Carry fragili
-        - Ali/Fianchi (0, 6, 7, 13): Assassini
+        Assegna le posizioni dei campioni sulla griglia nemica 7x3 (21 celle):
+        - Row 2 (Indici 14..20 - Prima Linea Frontline): Tank, Cavalieri, Guardiani, Picchiatori
+        - Row 1 (Indici 7..13 - Linea Intermedia): Combattenti secondari e supporto
+        - Row 0 (Indici 0..6 - Retroguardia Backline): Cecchini, Maghi, Carry a distanza
+        - Ali/Fianchi (0, 6, 7, 13, 14, 20): Assassini
         """
-        frontline_slots = [10, 9, 11, 8, 12, 7, 13] # Centro prima linea preferito
-        backline_slots = [3, 2, 4, 1, 5, 0, 6]     # Centro/angoli retroguardia
-        flank_slots = [0, 6, 7, 13]
+        frontline_slots = [17, 16, 18, 15, 19, 14, 20] # Centro prima linea preferito
+        midline_slots = [10, 9, 11, 8, 12, 7, 13]      # Seconda linea
+        backline_slots = [3, 2, 4, 1, 5, 0, 6]         # Centro/angoli retroguardia
+        flank_slots = [0, 6, 7, 13, 14, 20]
         
         used_slots = set()
         
@@ -250,7 +252,12 @@ class BotPlayer:
                         
             # Fallback se gli slot ideali sono pieni
             if assigned_slot is None:
-                for slot in range(14):
+                for slot in midline_slots + frontline_slots + backline_slots:
+                    if slot not in used_slots:
+                        assigned_slot = slot
+                        break
+            if assigned_slot is None:
+                for slot in range(21):
                     if slot not in used_slots:
                         assigned_slot = slot
                         break

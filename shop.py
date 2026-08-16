@@ -421,6 +421,15 @@ class ShopManager:
         sell_price = total_invested if level == 1 else max(1, total_invested - 1)
         
         self.game.player_gold += sell_price
+        
+        # Recupera tutti gli oggetti equipaggiati sul campione e rimettili nel banco oggetti
+        champ_items = getattr(champion, 'items', [])
+        for itm in list(champ_items):
+            if len(self.game.player_items) < 8:
+                self.game.player_items.append(itm)
+                print(f"🎒 Oggetto restituito al banco: {itm}")
+        champion.items = []
+        
         if hasattr(self.game, 'audio'):
             self.game.audio.play_sfx("sell")
         print(f"💰 VENDUTO {champion.name} (★{level}) per +{sell_price} Oro!")
@@ -466,13 +475,14 @@ class ShopManager:
         self.dragged_from_index = -1
 
     def get_board_rects(self):
+        """Calcola le 21 celle della scacchiera (7 colonne x 3 righe, formato canonico TFT)"""
         sw = self.game.screen.get_width()
         sh = self.game.screen.get_height()
         rects = []
-        cell_w, cell_h = 92, 92
-        cols, rows = 7, 2
+        cell_w, cell_h = 88, 76
+        cols, rows = 7, 3
         x_start = (sw - (cols * cell_w)) // 2
-        y_start = int(sh * 0.35)
+        y_start = int(sh * 0.32)
         
         for r in range(rows):
             for c in range(cols):
@@ -485,23 +495,24 @@ class ShopManager:
         sw = self.game.screen.get_width()
         sh = self.game.screen.get_height()
         rects = []
-        cell_w, cell_h = 88, 88
+        cell_w, cell_h = 82, 76
         cols = self.game.bench_slots
         x_start = (sw - (cols * cell_w)) // 2
-        y = int(sh * 0.58)
+        y = int(sh * 0.61)
         for i in range(cols):
             x = x_start + i * cell_w
             rects.append(pygame.Rect(x, y, cell_w, cell_h))
         return rects
 
     def get_item_bench_rects(self):
+        """Restituisce le coordinate per gli 8 slot del banco oggetti con dimensioni e margini perfetti"""
         sw = self.game.screen.get_width()
         sh = self.game.screen.get_height()
         rects = []
-        slot_size = 40
+        slot_size = 42
         spacing = 6
-        x_start = 24
-        y_start = sh - 145
+        x_start = 25
+        y_start = sh - 146
         for i in range(8):
             col = i % 4
             row = i // 4
@@ -666,12 +677,17 @@ class ShopManager:
         draw_hud_augments(surface, mouse_pos, player_augments, start_x=20, start_y=14)
         draw_traits_sidebar(surface, active_traits, start_x=20, start_y=54)
         
-        # Damage Meter sotto alle Sinergie a sinistra con spazio extra
+        # Calcola altezza dinamica delle Sinergie per posizionare il Damage Meter senza alcuna sovrapposizione
+        shown_count = min(6, len(active_traits))
+        traits_height = (28 + shown_count * 43) if shown_count > 0 else 0
+        dm_y = max(370, 54 + traits_height + 22)
+        
+        # Damage Meter sotto alle Sinergie a sinistra con margine generoso
         if hasattr(self.game, 'damage_meter') and getattr(self.game, 'last_battle_player_team', None):
             self.game.damage_meter.draw(
                 surface, mouse_pos, self.game.last_battle_player_team, 
                 elapsed_seconds=getattr(self.game, 'last_battle_duration', 5.0), 
-                start_x=20, start_y=290
+                start_x=20, start_y=dm_y
             )
         
         # --- CLASSIFICA LOBBY (LATO DESTRO, ABBASSATA A Y=52 PER LASCIARE SPAZIO IN ALTO) ---
@@ -802,7 +818,7 @@ class ShopManager:
             draw_text("COMBATTI", BUTTON_FONT, WHITE if can_confirm else (150, 150, 150), surface, self.confirm_button_rect.centerx, self.confirm_button_rect.centery)
 
         # --- 8. BANCO INVENTARIO OGGETTI (IN BASSO A SINISTRA) ---
-        item_box_rect = pygame.Rect(18, sh - 170, 200, 100)
+        item_box_rect = pygame.Rect(16, sh - 180, 216, 126)
         draw_glass_panel(surface, item_box_rect, border_radius=14, bg_color=(14, 18, 28, 230), border_color=(190, 160, 60, 170), border_width=1)
         draw_text("BANCO OGGETTI", HEADER_FONT, GOLD, surface, item_box_rect.centerx, item_box_rect.top + 16)
         

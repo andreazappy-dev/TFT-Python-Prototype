@@ -83,7 +83,7 @@ class Game:
         self.carousel_rounds = [1, 4, 7]
         self.carousel_selection_triggered_rounds = set()
         
-        self.board_slots = 14 # 7 colonne x 2 righe
+        self.board_slots = 21 # 7 colonne x 3 righe (formato canonico TFT)
         self.bench_slots = 9 
         self.board = [None] * self.board_slots 
         self.bench = [None] * self.bench_slots

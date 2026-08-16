@@ -249,12 +249,14 @@ def get_pve_encounter(round_number):
     Restituisce i mostri e le sfere di bottino pianificate per il round PvE.
     """
     if round_number == 2:
-        # Ondata Minion (3 Minion)
-        monsters = [
-            Monster("Minion Mischia", hp=360, attack=28, defense=15, attack_range=1, monster_type="minion_melee"),
-            Monster("Minion Caster", hp=280, attack=35, defense=10, attack_range=3, monster_type="minion_caster"),
-            Monster("Minion Mischia", hp=360, attack=28, defense=15, attack_range=1, monster_type="minion_melee"),
-        ]
+        # Ondata Minion (2 Mischia in Frontline, 1 Caster in Midline)
+        m1 = Monster("Minion Mischia", hp=360, attack=28, defense=15, attack_range=1, monster_type="minion_melee")
+        m2 = Monster("Minion Caster", hp=280, attack=35, defense=10, attack_range=3, monster_type="minion_caster")
+        m3 = Monster("Minion Mischia", hp=360, attack=28, defense=15, attack_range=1, monster_type="minion_melee")
+        m1.board_index = 16 # Row 2 (Frontline)
+        m2.board_index = 10 # Row 1 (Midline)
+        m3.board_index = 18 # Row 2 (Frontline)
+        monsters = [m1, m2, m3]
         orbs = [
             LootOrb(0, 0, tier="grey", rewards={"gold": 3, "item": None}),
             LootOrb(0, 0, tier="blue", rewards={"gold": 1, "item": get_random_component_key()})
@@ -267,11 +269,12 @@ def get_pve_encounter(round_number):
         }
         
     elif round_number == 6:
-        # Golem di Pietra (Krugs)
-        monsters = [
-            Monster("Krug Antico", hp=1100, attack=68, defense=35, attack_range=1, monster_type="krug_big"),
-            Monster("Krug Minore", hp=750, attack=50, defense=25, attack_range=1, monster_type="krug_small"),
-        ]
+        # Golem di Pietra (Krugs in Frontline)
+        k1 = Monster("Krug Antico", hp=1100, attack=68, defense=35, attack_range=1, monster_type="krug_big")
+        k2 = Monster("Krug Minore", hp=750, attack=50, defense=25, attack_range=1, monster_type="krug_small")
+        k1.board_index = 16 # Row 2
+        k2.board_index = 18 # Row 2
+        monsters = [k1, k2]
         orbs = [
             LootOrb(0, 0, tier="blue", rewards={"gold": 2, "item": get_random_component_key()}),
             LootOrb(0, 0, tier="blue", rewards={"gold": 2, "item": get_random_component_key()})
@@ -284,12 +287,14 @@ def get_pve_encounter(round_number):
         }
         
     elif round_number == 9:
-        # Lupi delle Tenebre (Murkwolves)
-        monsters = [
-            Monster("Lupo Alpha", hp=950, attack=75, defense=25, crit_chance=0.40, attack_speed=1.15, monster_type="wolf_alpha"),
-            Monster("Lupo Silvano", hp=680, attack=58, defense=20, crit_chance=0.30, attack_speed=1.10, monster_type="wolf"),
-            Monster("Lupo Silvano", hp=680, attack=58, defense=20, crit_chance=0.30, attack_speed=1.10, monster_type="wolf"),
-        ]
+        # Lupi delle Tenebre (Murkwolves in Frontline & Fianchi)
+        w1 = Monster("Lupo Alpha", hp=950, attack=75, defense=25, crit_chance=0.40, attack_speed=1.15, monster_type="wolf_alpha")
+        w2 = Monster("Lupo Silvano", hp=680, attack=58, defense=20, crit_chance=0.30, attack_speed=1.10, monster_type="wolf")
+        w3 = Monster("Lupo Silvano", hp=680, attack=58, defense=20, crit_chance=0.30, attack_speed=1.10, monster_type="wolf")
+        w1.board_index = 17 # Row 2 Centro
+        w2.board_index = 15 # Row 2 Fianco
+        w3.board_index = 19 # Row 2 Fianco
+        monsters = [w1, w2, w3]
         orbs = [
             LootOrb(0, 0, tier="blue", rewards={"gold": 3, "item": get_random_component_key()}),
             LootOrb(0, 0, tier="gold", rewards={"gold": 5, "item": get_random_component_key(), "champion": random.choice(["Lux", "Yasuo", "Darius"])})
@@ -302,10 +307,10 @@ def get_pve_encounter(round_number):
         }
         
     elif round_number >= 12:
-        # Boss Drago Antico
-        monsters = [
-            Monster("Drago Antico", hp=3500, attack=130, defense=55, attack_range=2, mana_max=100, mana_start=40, monster_type="dragon")
-        ]
+        # Boss Drago Antico (Centro Frontline)
+        d = Monster("Drago Antico", hp=3500, attack=130, defense=55, attack_range=2, mana_max=100, mana_start=40, monster_type="dragon")
+        d.board_index = 17 # Row 2 Centro
+        monsters = [d]
         completed_pool = ["Giant Slayer", "Infinity Edge", "Warmog's Armor", "Rabadon's Deathcap", "Bloodthirster"]
         orbs = [
             LootOrb(0, 0, tier="gold", rewards={"gold": 10, "item": random.choice(completed_pool), "champion": random.choice(["Azir", "Thresh", "Aurelion"])})

@@ -189,27 +189,28 @@ class BattleManager:
         return battle_team
 
     def setup_board_positions(self):
-        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x4 responsive con posizionamento tattico """
+        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x6 (3 righe nemico, 3 righe giocatore, stile canonico TFT) """
         sw = self.game.screen.get_width()
         sh = self.game.screen.get_height()
-        cell_w, cell_h = 92, 92
+        cell_w, cell_h = 88, 72
         offset_x = (sw - (7 * cell_w)) // 2
-        offset_y = int(sh * 0.26)
+        offset_y = int(sh * 0.18)
         
+        # Posizionamento Giocatore (Righe 3, 4, 5)
         for champ in self.player_team:
             idx = getattr(champ, 'board_index', 0)
-            row = 2 + (idx // 7)
+            row = 3 + (idx // 7)
             col = idx % 7
             champ.x = offset_x + col * cell_w + cell_w // 2
             champ.y = offset_y + row * cell_h + cell_h // 2
                 
-        # Nemici posizionati in base al loro board_index tattico (o fallback privo di sovrapposizioni)
+        # Posizionamento Nemici (Righe 0, 1, 2) in base al loro board_index tattico
         if self.enemy_team:
             used_enemy_slots = set()
             for champ in self.enemy_team:
                 idx = getattr(champ, 'board_index', None)
                 if idx is None or idx in used_enemy_slots:
-                    available = [s for s in range(14) if s not in used_enemy_slots]
+                    available = [s for s in range(21) if s not in used_enemy_slots]
                     idx = random.choice(available) if available else 0
                 used_enemy_slots.add(idx)
                 champ.board_index = idx
@@ -517,25 +518,30 @@ class BattleManager:
         draw_hud_augments(surface, mouse_pos, getattr(self.game, 'player_augments', []), start_x=20, start_y=14)
         draw_traits_sidebar(surface, getattr(self, "player_traits", []), start_x=20, start_y=54)
         
-        # Damage Meter posizionato sotto le sinergie a sinistra
+        # Calcola altezza dinamica delle Sinergie per posizionare il Damage Meter senza alcuna sovrapposizione
+        shown_count = min(6, len(getattr(self, "player_traits", [])))
+        traits_height = (28 + shown_count * 43) if shown_count > 0 else 0
+        dm_y = max(370, 54 + traits_height + 22)
+        
+        # Damage Meter posizionato sotto le sinergie a sinistra con margine generoso
         elapsed_sec = max(0.5, (pygame.time.get_ticks() - self.battle_start_ticks) / 1000.0)
-        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=20, start_y=290)
+        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=20, start_y=dm_y)
         
         # Classifica a destra abbassata a start_y=52 per lasciare spazio in alto
         if hasattr(self.game, 'lobby_manager'):
             self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=sw - 215, start_y=52)
         
-        # 4. Campo di battaglia a griglia (7x4)
-        cell_w, cell_h = 92, 92
-        offset_x, offset_y = (sw - (7 * cell_w)) // 2, int(sh * 0.26)
-        cols, rows = 7, 4
+        # 4. Campo di battaglia a griglia (7x6, 3 righe nemico, 3 righe giocatore)
+        cell_w, cell_h = 88, 72
+        offset_x, offset_y = (sw - (7 * cell_w)) // 2, int(sh * 0.18)
+        cols, rows = 7, 6
         
         for r in range(rows):
             for c in range(cols):
                 rect = pygame.Rect(offset_x + c * cell_w, offset_y + r * cell_h, cell_w, cell_h)
                 cell_surf = pygame.Surface((cell_w, cell_h), pygame.SRCALPHA)
                 
-                if r >= 2:
+                if r >= 3:
                     pygame.draw.rect(cell_surf, (18, 38, 26, 210), (2, 2, cell_w - 4, cell_h - 4), border_radius=14) # Lato Player
                     pygame.draw.rect(cell_surf, (45, 160, 80, 140), (2, 2, cell_w - 4, cell_h - 4), width=1, border_radius=14)
                 else:
