@@ -44,13 +44,13 @@ class Projectile:
         self.target_x = target.x if target else start_x + 100
         self.target_y = target.y if target else start_y
         self.speed = speed
-        self.proj_type = proj_type # "BASIC", "ORB", "ROCKET", "METEOR", "DIVINE_SWORD", "MYSTIC_ARC"
+        self.proj_type = proj_type # "BASIC", "ORB", "ROCKET", "METEOR", "DIVINE_SWORD", "ICE_ARROW", "TORNADO", "DAGGER"
         self.color = color
         self.on_hit = on_hit
         self.is_alive = True
         self.trail_timer = 0.0
         self.rotation = 0.0
-        self.size = 12 if proj_type in ["ORB", "ROCKET"] else 8
+        self.size = 14 if proj_type in ["ORB", "ROCKET", "TORNADO"] else 8
 
     def update(self, dt, particles_list):
         if not self.is_alive:
@@ -79,6 +79,14 @@ class Projectile:
             elif self.proj_type == "METEOR":
                 particles_list.append(Particle(self.x, self.y, random.uniform(-30, 30), random.uniform(-30, 30), (140, 70, 255), radius=6, max_life=0.4))
                 particles_list.append(Particle(self.x, self.y, random.uniform(-20, 20), random.uniform(-20, 20), (255, 200, 50), radius=4, max_life=0.3))
+            elif self.proj_type == "ICE_ARROW":
+                particles_list.append(Particle(self.x, self.y, random.uniform(-15, 15), random.uniform(-15, 15), (140, 230, 255), radius=4, max_life=0.35))
+                particles_list.append(Particle(self.x, self.y, random.uniform(-10, 10), random.uniform(-10, 10), (255, 255, 255), radius=2, max_life=0.2))
+            elif self.proj_type == "TORNADO":
+                particles_list.append(Particle(self.x, self.y, random.uniform(-25, 25), random.uniform(-25, 25), (200, 235, 255), radius=5, max_life=0.4))
+                particles_list.append(Particle(self.x, self.y, random.uniform(-15, 15), random.uniform(-15, 15), (120, 180, 220), radius=3, max_life=0.25))
+            elif self.proj_type == "DAGGER":
+                particles_list.append(Particle(self.x, self.y, random.uniform(-10, 10), random.uniform(-10, 10), (255, 60, 60), radius=3, max_life=0.25))
             else:
                 particles_list.append(Particle(self.x, self.y, random.uniform(-10, 10), random.uniform(-10, 10), self.color, radius=3, max_life=0.25))
 
@@ -95,13 +103,19 @@ class Projectile:
             self.y += (dy / dist) * step
 
     def create_impact_vfx(self, particles_list):
-        count = 20 if self.proj_type in ["ROCKET", "METEOR"] else 10
+        count = 20 if self.proj_type in ["ROCKET", "METEOR", "ICE_ARROW", "TORNADO"] else 10
         for _ in range(count):
             angle = random.uniform(0, math.pi * 2)
             spd = random.uniform(50, 180)
             vx = math.cos(angle) * spd
             vy = math.sin(angle) * spd
-            col = self.color if self.proj_type != "ROCKET" else random.choice([(255, 60, 60), (255, 180, 40), (255, 240, 80)])
+            col = self.color
+            if self.proj_type == "ROCKET":
+                col = random.choice([(255, 60, 60), (255, 180, 40), (255, 240, 80)])
+            elif self.proj_type == "ICE_ARROW":
+                col = random.choice([(120, 220, 255), (180, 245, 255), (255, 255, 255)])
+            elif self.proj_type == "TORNADO":
+                col = random.choice([(200, 230, 255), (150, 200, 240), (255, 255, 255)])
             particles_list.append(Particle(self.x, self.y, vx, vy, col, radius=random.randint(3, 6), max_life=0.45))
 
     def draw(self, surface):
@@ -110,26 +124,29 @@ class Projectile:
             
         cx, cy = int(self.x), int(self.y)
         if self.proj_type == "ORB":
-            # Sfera magica rotante con doppio anello
             pygame.draw.circle(surface, (255, 100, 200), (cx, cy), 10)
             pygame.draw.circle(surface, (100, 220, 255), (cx, cy), 6)
             pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 3)
         elif self.proj_type == "ROCKET":
-            # Ogiva razzo con fiammata
             pygame.draw.circle(surface, (230, 60, 60), (cx, cy), 8)
             pygame.draw.circle(surface, (255, 200, 40), (cx, cy), 5)
             pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 2)
         elif self.proj_type == "METEOR":
-            # Meteora cosmica gigante
             pygame.draw.circle(surface, (120, 50, 240), (cx, cy), 14)
             pygame.draw.circle(surface, (255, 180, 50), (cx, cy), 9)
             pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 4)
+        elif self.proj_type == "ICE_ARROW":
+            # Freccia di ghiaccio appuntita
+            pygame.draw.line(surface, (140, 225, 255), (cx - 10, cy), (cx + 10, cy), 4)
+            pygame.draw.circle(surface, (255, 255, 255), (cx + 8, cy), 5)
+        elif self.proj_type == "TORNADO":
+            # Vortice di vento
+            pygame.draw.circle(surface, (180, 220, 255, 180), (cx, cy), 16, width=3)
+            pygame.draw.circle(surface, (230, 245, 255), (cx, cy), 8)
         elif self.proj_type == "DIVINE_SWORD":
-            # Spada di luce celestiale
             pygame.draw.line(surface, (255, 240, 140), (cx, cy - 16), (cx, cy + 16), 4)
             pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 6)
         else:
-            # Dardo d'energia base
             pygame.draw.circle(surface, self.color, (cx, cy), 6)
             pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 3)
 
@@ -194,3 +211,96 @@ class ShockwaveVFX:
             col_with_alpha = (self.color[0], self.color[1], self.color[2], alpha)
             pygame.draw.circle(surf, col_with_alpha, (self.max_radius + 2, self.max_radius + 2), curr_radius, width=3)
             surface.blit(surf, (int(self.x - self.max_radius - 2), int(self.y - self.max_radius - 2)))
+
+class LaserBeamVFX:
+    """Raggio Laser Gigante di Lux a tutta mappa"""
+    def __init__(self, start_x, start_y, target_x, target_y, color=(255, 235, 120), duration=0.5):
+        self.start_x = start_x
+        self.start_y = start_y
+        self.target_x = target_x
+        self.target_y = target_y
+        self.color = color
+        self.duration = duration
+        self.time = 0.0
+
+    def update(self, dt):
+        self.time += dt
+
+    @property
+    def is_alive(self):
+        return self.time < self.duration
+
+    def draw(self, surface):
+        if not self.is_alive:
+            return
+        progress = self.time / self.duration
+        alpha = int(255 * (1.0 - progress))
+        beam_w = int(22 * (1.0 - progress * 0.5))
+        
+        # Linea laser con bagliore
+        surf = pygame.Surface((surface.get_width(), surface.get_height()), pygame.SRCALPHA)
+        col_core = (255, 255, 255, alpha)
+        col_outer = (*self.color[:3], int(alpha * 0.7))
+        
+        pygame.draw.line(surf, col_outer, (self.start_x, self.start_y), (self.target_x, self.target_y), beam_w + 10)
+        pygame.draw.line(surf, col_core, (self.start_x, self.start_y), (self.target_x, self.target_y), max(2, beam_w // 2))
+        surface.blit(surf, (0, 0))
+
+class SandSoldiersVFX:
+    """Falange di soldati di sabbia dorata di Azir"""
+    def __init__(self, start_x, start_y, target_x, target_y, duration=0.6):
+        self.x = start_x
+        self.y = start_y
+        self.target_x = target_x
+        self.target_y = target_y
+        self.duration = duration
+        self.time = 0.0
+
+    def update(self, dt):
+        self.time += dt
+
+    @property
+    def is_alive(self):
+        return self.time < self.duration
+
+    def draw(self, surface):
+        if not self.is_alive:
+            return
+        progress = min(1.0, self.time / self.duration)
+        cx = self.x + (self.target_x - self.x) * progress
+        cy = self.y + (self.target_y - self.y) * progress
+        
+        for offset in [-35, 0, 35]:
+            sx, sy = int(cx), int(cy + offset)
+            pygame.draw.circle(surface, (255, 200, 50), (sx, sy), 14)
+            pygame.draw.circle(surface, (255, 240, 140), (sx, sy), 7)
+            pygame.draw.line(surface, (255, 230, 80), (sx, sy), (sx + 20, sy), 4)
+
+class HookChainVFX:
+    """Catena spettrale di Thresh che si estende verso il bersaglio"""
+    def __init__(self, start_x, start_y, target_x, target_y, duration=0.45):
+        self.start_x = start_x
+        self.start_y = start_y
+        self.target_x = target_x
+        self.target_y = target_y
+        self.duration = duration
+        self.time = 0.0
+
+    def update(self, dt):
+        self.time += dt
+
+    @property
+    def is_alive(self):
+        return self.time < self.duration
+
+    def draw(self, surface):
+        if not self.is_alive:
+            return
+        progress = min(1.0, self.time / self.duration)
+        tip_x = self.start_x + (self.target_x - self.start_x) * progress
+        tip_y = self.start_y + (self.target_y - self.start_y) * progress
+        
+        # Maglie della catena verde spettrale
+        pygame.draw.line(surface, (40, 230, 160), (self.start_x, self.start_y), (tip_x, tip_y), 4)
+        pygame.draw.circle(surface, (120, 255, 200), (int(tip_x), int(tip_y)), 8)
+        pygame.draw.circle(surface, (255, 255, 255), (int(tip_x), int(tip_y)), 4)

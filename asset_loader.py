@@ -49,8 +49,31 @@ def get_champion_sprite(name, width=80, height=80, flip_x=False, white_flash=Fal
     _SPRITE_CACHE[cache_key] = final_surf
     return final_surf
 
+# Palette tematiche procedurali per ritratti campioni
+THEME_PALETTES = {
+    "garen": ((40, 90, 180), (220, 180, 50)),
+    "darius": ((140, 20, 20), (210, 40, 40)),
+    "ashe": ((60, 150, 220), (210, 240, 255)),
+    "vi": ((160, 30, 120), (240, 80, 180)),
+    "ahri": ((190, 40, 120), (255, 140, 200)),
+    "zed": ((30, 20, 35), (200, 30, 50)),
+    "braum": ((35, 75, 130), (140, 210, 255)),
+    "ezreal": ((180, 140, 20), (255, 235, 90)),
+    "jinx": ((180, 30, 100), (40, 210, 230)),
+    "riven": ((50, 110, 80), (140, 235, 160)),
+    "katarina": ((130, 20, 30), (240, 50, 70)),
+    "yasuo": ((40, 85, 140), (120, 210, 255)),
+    "shen": ((60, 40, 110), (160, 100, 240)),
+    "kayle": ((180, 140, 30), (255, 245, 160)),
+    "lux": ((190, 160, 50), (255, 250, 180)),
+    "sejuani": ((40, 95, 140), (160, 230, 255)),
+    "aurelion": ((40, 20, 110), (150, 90, 255)),
+    "azir": ((180, 130, 20), (255, 215, 60)),
+    "thresh": ((15, 65, 55), (40, 235, 170))
+}
+
 def get_champion_raw_image(name):
-    """Carica l'immagine originale del campione o crea un fallback"""
+    """Carica l'immagine originale del campione o genera una texture procedurale tematica HD"""
     key = name.lower()
     if key in _RAW_CACHE:
         return _RAW_CACHE[key]
@@ -64,9 +87,32 @@ def get_champion_raw_image(name):
         except Exception as e:
             print(f"Errore nel caricamento di {file_path}: {e}")
             
-    # Fallback: superficie colorata
-    surf = pygame.Surface((200, 200), pygame.SRCALPHA)
-    surf.fill((60, 60, 70))
+    # Generazione procedurale artistica con gradiente e stemma
+    surf = pygame.Surface((240, 240), pygame.SRCALPHA)
+    palette = THEME_PALETTES.get(key, ((50, 60, 80), (180, 190, 210)))
+    col_bg, col_fg = palette
+    
+    # Gradiente radiale
+    for r in range(120, 0, -3):
+        ratio = r / 120.0
+        c = (
+            int(col_bg[0] * ratio + col_fg[0] * (1 - ratio)),
+            int(col_bg[1] * ratio + col_fg[1] * (1 - ratio)),
+            int(col_bg[2] * ratio + col_fg[2] * (1 - ratio))
+        )
+        pygame.draw.circle(surf, c, (120, 120), r)
+        
+    # Bordo e Lettera Stile Riot
+    pygame.draw.circle(surf, col_fg, (120, 120), 116, width=4)
+    font = pygame.font.SysFont("Arial", 80, bold=True)
+    txt_surf = font.render(name[0], True, (255, 255, 255))
+    surf.blit(txt_surf, (120 - txt_surf.get_width() // 2, 120 - txt_surf.get_height() // 2 - 10))
+    
+    # Nome in basso
+    sub_font = pygame.font.SysFont("Arial", 22, bold=True)
+    name_surf = sub_font.render(name[:9], True, col_fg)
+    surf.blit(name_surf, (120 - name_surf.get_width() // 2, 175))
+    
     _RAW_CACHE[key] = surf
     return surf
 

@@ -14,7 +14,10 @@ from items import apply_item_stats, get_item_data
 from asset_loader import get_background_image, draw_glass_panel, get_champion_sprite
 from augments import draw_hud_augments
 from damage_meter import DamageMeter
-from battle_animations import Particle, Projectile, SlashVFX, ShockwaveVFX
+from battle_animations import (
+    Particle, Projectile, SlashVFX, ShockwaveVFX, 
+    LaserBeamVFX, SandSoldiersVFX, HookChainVFX
+)
 
 class BattleManager:
     """
@@ -33,6 +36,7 @@ class BattleManager:
         self.projectiles = []
         self.slash_effects = []
         self.shockwaves = []
+        self.custom_vfx = []
         self.screen_shake_timer = 0.0
         self.screen_shake_intensity = 0
         
@@ -260,12 +264,13 @@ class BattleManager:
                 continue
 
             # Rotazione speciale (Garen Giudizio)
+                champ.death_timer += delta_time
+                champ.death_alpha = max(0, int(255 * (1.0 - champ.death_timer / 0.8)))
+                continue
+
+            # Rotazione speciale
             if champ.name == "Garen" and champ.spell_animation_timer > 0:
-                champ.rotation_angle = (1.0 - champ.spell_animation_timer) * 1440 # 4 rotazioni complete
-                if random.random() < 0.6:
-                    ang = random.uniform(0, math.pi * 2)
-                    spd = random.uniform(80, 160)
-                    self.particles.append(Particle(champ.x, champ.y, math.cos(ang) * spd, math.sin(ang) * spd, (255, 215, 60), radius=4, max_life=0.35))
+                champ.rotation_angle = (champ.rotation_angle + 1080 * delta_time) % 360
             else:
                 champ.rotation_angle = 0
 
@@ -313,6 +318,14 @@ class BattleManager:
                         # Generazione VFX Spettacolari
                         if champ.name == "Garen":
                             self.slash_effects.append(SlashVFX(champ.x, champ.y, radius=70, color=(255, 215, 50), duration=0.8))
+                        elif champ.name == "Darius":
+                            tx = champ.target.x if champ.target else champ.x
+                            ty = champ.target.y if champ.target else champ.y
+                            self.slash_effects.append(SlashVFX(tx, ty, radius=75, color=(240, 40, 40), duration=0.35))
+                            self.shockwaves.append(ShockwaveVFX(tx, ty, max_radius=60, color=(220, 30, 30), duration=0.3))
+                        elif champ.name == "Ashe":
+                            if champ.target:
+                                self.projectiles.append(Projectile(champ.x, champ.y - 12, champ.target, speed=600, proj_type="ICE_ARROW", color=(140, 230, 255)))
                         elif champ.name == "Ahri":
                             if champ.target:
                                 self.projectiles.append(Projectile(champ.x, champ.y - 15, champ.target, speed=520, proj_type="ORB", color=(255, 120, 220)))
@@ -322,33 +335,60 @@ class BattleManager:
                             self.shockwaves.append(ShockwaveVFX(tx, ty, max_radius=85, color=(100, 220, 255), duration=0.45))
                             for _ in range(16):
                                 self.particles.append(Particle(tx, ty, random.uniform(-120, 120), random.uniform(-120, 120), (255, 210, 80), radius=4, max_life=0.4))
+                        elif champ.name == "Zed":
+                            tx = champ.target.x if champ.target else champ.x
+                            ty = champ.target.y if champ.target else champ.y
+                            self.slash_effects.append(SlashVFX(tx, ty, radius=60, color=(200, 30, 50), duration=0.25))
+                            self.shockwaves.append(ShockwaveVFX(champ.x, champ.y, max_radius=50, color=(50, 20, 40), duration=0.3))
+                        elif champ.name == "Braum":
+                            self.shockwaves.append(ShockwaveVFX(champ.x, champ.y, max_radius=75, color=(140, 225, 255), duration=0.6))
                         elif champ.name == "Ezreal":
                             if champ.target:
                                 self.projectiles.append(Projectile(champ.x, champ.y - 15, champ.target, speed=680, proj_type="BASIC", color=(255, 235, 70)))
                         elif champ.name == "Jinx":
                             if champ.target:
                                 self.projectiles.append(Projectile(champ.x, champ.y - 20, champ.target, speed=480, proj_type="ROCKET", color=(255, 70, 70)))
-                        elif champ.name == "Aurelion":
-                            for enemy in self.enemy_team:
-                                if enemy.is_alive():
-                                    self.projectiles.append(Projectile(enemy.x + random.uniform(-30, 30), enemy.y - 280, enemy, speed=600, proj_type="METEOR", color=(140, 80, 255)))
-                        elif champ.name == "Kayle":
-                            for enemy in self.enemy_team:
-                                if enemy.is_alive():
-                                    self.projectiles.append(Projectile(enemy.x, enemy.y - 250, enemy, speed=700, proj_type="DIVINE_SWORD", color=(255, 235, 90)))
                         elif champ.name == "Riven":
                             tx = champ.target.x if champ.target else champ.x
                             ty = champ.target.y if champ.target else champ.y
                             self.slash_effects.append(SlashVFX(tx, ty, radius=65, color=(60, 240, 130), duration=0.4))
+                        elif champ.name == "Katarina":
+                            for _ in range(3):
+                                self.slash_effects.append(SlashVFX(champ.x + random.uniform(-30, 30), champ.y + random.uniform(-30, 30), radius=55, color=(240, 50, 70), duration=0.3))
+                        elif champ.name == "Yasuo":
+                            if champ.target:
+                                self.projectiles.append(Projectile(champ.x, champ.y - 15, champ.target, speed=550, proj_type="TORNADO", color=(180, 230, 255)))
                         elif champ.name == "Shen":
                             self.shockwaves.append(ShockwaveVFX(champ.x, champ.y, max_radius=70, color=(80, 220, 255), duration=0.7))
+                        elif champ.name == "Kayle":
+                            for enemy in self.enemy_team:
+                                if enemy.is_alive():
+                                    self.projectiles.append(Projectile(enemy.x, enemy.y - 250, enemy, speed=700, proj_type="DIVINE_SWORD", color=(255, 235, 90)))
+                        elif champ.name == "Lux":
+                            tx = (champ.target.x + 800) if (champ.target and champ.target.x > champ.x) else (champ.x + 800 if champ.facing_right else champ.x - 800)
+                            ty = champ.target.y if champ.target else champ.y
+                            self.custom_vfx.append(LaserBeamVFX(champ.x, champ.y - 10, tx, ty, color=(255, 245, 120), duration=0.45))
+                        elif champ.name == "Sejuani":
+                            self.shockwaves.append(ShockwaveVFX(champ.x, champ.y, max_radius=130, color=(120, 220, 255), duration=0.6))
+                        elif champ.name == "Aurelion":
+                            for enemy in self.enemy_team:
+                                if enemy.is_alive():
+                                    self.projectiles.append(Projectile(enemy.x + random.uniform(-30, 30), enemy.y - 280, enemy, speed=600, proj_type="METEOR", color=(140, 80, 255)))
+                        elif champ.name == "Azir":
+                            tx = champ.target.x if champ.target else champ.x + 300
+                            ty = champ.target.y if champ.target else champ.y
+                            self.custom_vfx.append(SandSoldiersVFX(champ.x, champ.y, tx, ty, duration=0.55))
+                        elif champ.name == "Thresh":
+                            tx = champ.target.x if champ.target else champ.x + 250
+                            ty = champ.target.y if champ.target else champ.y
+                            self.custom_vfx.append(HookChainVFX(champ.x, champ.y, tx, ty, duration=0.45))
                     else:
                         # Attacco Base con Scatto Melee o Proiettile Ranged
                         champ.basic_attack(champ.target)
                         
                         if champ.attack_range > 100:
                             # Ranged Projectile
-                            proj_col = (255, 225, 70) if champ.name == "Ezreal" else ((255, 120, 220) if champ.name == "Ahri" else (180, 220, 255))
+                            proj_col = (255, 225, 70) if champ.name == "Ezreal" else ((255, 120, 220) if champ.name == "Ahri" else ((140, 230, 255) if champ.name in ["Ashe", "Lux"] else (180, 220, 255)))
                             self.projectiles.append(Projectile(champ.x, champ.y - 12, champ.target, speed=540, proj_type="BASIC", color=proj_col))
                         else:
                             # Melee Lunge & Slash Arc
@@ -523,7 +563,11 @@ class BattleManager:
         for p in self.particles:
             p.draw(surface)
 
-        # 10. Disegna Popup Danno con Ombreggiatura
+        # 10. Disegna Custom VFX (Laser Lux, Soldati Azir, Catene Thresh)
+        for vfx in self.custom_vfx:
+            vfx.draw(surface)
+
+        # 11. Disegna Popup Danno con Ombreggiatura
         for champ in self.all_champs:
             for popup in list(champ.damage_popup_texts): 
                 shadow = TEXT_FONT.render(popup["text"], True, (0, 0, 0))

@@ -40,9 +40,17 @@ The engine is decoupled into specialized subsystems communicating through a cent
 - **Responsive Little Legend & Autonomous Bot Pathing:** Players control their avatar via mouse destination clicking or WASD; 7 bots calculate real-time vector paths toward optimal synergy/item components.
 - **Collision & Item Attachment:** Touching a champion claims both the unit and its attached item component, transferring them to the player's bench and inventory.
 
-### 2. Real-Time Combat Simulation & AI (`battle.py`, `champions.py`)
+### 2. 19-Champion Roster & Synergies Matrix (`champions.py`, `traits.py`)
+- **Tier 1 (1g):** Garen (*Demacia Cavaliere*), Darius (*Noxus Cavaliere* - *Noxian Guillotine*), Ashe (*Freljord Cecchino* - *Enchanted Crystal Arrow*).
+- **Tier 2 (2g):** Ahri (*Ionia Mago*), Vi (*Piltover Picchiatore*), Zed (*Ionia Assassino* - *Death Mark shadow teleport*), Braum (*Freljord Guardiano* - *Glacial Shield*).
+- **Tier 3 (3g):** Ezreal (*Piltover Cecchino*), Jinx (*Zaun Cecchino*), Riven (*Noxus Duellante*), Katarina (*Noxus Assassino* - *Death Lotus*), Yasuo (*Ionia Duellante* - *Steel Tempest Tornado*).
+- **Tier 4 (4g):** Shen (*Ionia Ninja*), Kayle (*Demacia Divino*), Lux (*Demacia Mago* - *Final Spark full-board laser*), Sejuani (*Freljord Cavaliere* - *Glacial Prison AoE freeze*).
+- **Tier 5 (5g):** Aurelion Sol (*Drago Mago* - *Cosmic Meteor Storm*), Azir (*Shurima Mago* - *Emperor's Divide sand soldiers*), Thresh (*Shadow Isles Guardiano* - *Death Sentence chain hook*).
+- **Synergy Multipliers:** Sinergie complete con breakpoint modulari (Assassino crit/jump, Guardiano shield aura, Noxus HP/AD conquest stacks, Freljord resist shred, Shurima solar regeneration, Shadow Isles spectral barrier).
+
+### 3. Real-Time Combat Simulation & AI (`battle.py`, `champions.py`)
 - **Target Selection & Pathing:** Discrete euclidean distance calculation with real-time dynamic target re-acquisition upon unit death.
-- **Mana & Spell Cycle:** Units generate mana on attack and damage taken; at max mana, basic attacks are superseded by special ability routines (e.g., Garen 360° blade storm, Vi kinetic shockwave, Ahri traveling magic orb, Aurelion Sol cosmic meteor storm).
+- **Mana & Spell Cycle:** Units generate mana on attack and damage taken; at max mana, basic attacks are superseded by special ability routines (e.g., Lux screen-wide rainbow laser, Garen 360° blade storm, Darius decapitation strike, Yasuo whirlwind, Azir sand legion, Thresh spectral hook).
 - **Damage Pipeline:** Differentiates physical and magic damage, calculates critical strikes, armor/magic mitigation, and life-steal healing.
 - **DPS & Combat Tracker (`damage_meter.py`):** Real-time multi-tabbed meter tracking physical/magic damage output, damage taken, and healing done per unit with proportional comparative graphs.
 
