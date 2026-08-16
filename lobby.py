@@ -7,23 +7,79 @@ from items import get_random_component_key
 from asset_loader import draw_glass_panel
 
 BOT_NAMES_DATA = [
-    {"name": "PenguMaster", "theme": "Demacia/Guardiano", "color": (230, 200, 80)},
-    {"name": "HextechKing", "theme": "Piltover/Zaun", "color": (80, 200, 230)},
-    {"name": "ChonccLover", "theme": "Ionia/Mago", "color": (230, 100, 160)},
-    {"name": "DariusMain", "theme": "Noxus/Combattente", "color": (220, 50, 50)},
-    {"name": "CosmicVoyager", "theme": "Cosmico/Divino", "color": (140, 90, 240)},
-    {"name": "SniperQueen", "theme": "Piltover/Cecchino", "color": (240, 180, 40)},
-    {"name": "ShadowIsles", "theme": "Zaun/Mago", "color": (60, 220, 130)},
+    {
+        "name": "PenguMaster", 
+        "theme": "Demacia/Cavaliere", 
+        "color": (230, 200, 80),
+        "target_traits": ["Demacia", "Cavaliere"],
+        "carries": ["Lux", "Kayle", "Garen"],
+        "tanks": ["Garen", "Sejuani", "Braum"]
+    },
+    {
+        "name": "HextechKing", 
+        "theme": "Piltover/Zaun", 
+        "color": (80, 200, 230),
+        "target_traits": ["Piltover", "Picchiatore", "Cecchino"],
+        "carries": ["Jinx", "Ezreal", "Ashe"],
+        "tanks": ["Vi", "Braum"]
+    },
+    {
+        "name": "ChonccLover", 
+        "theme": "Ionia/Mago", 
+        "color": (230, 100, 160),
+        "target_traits": ["Ionia", "Assassino", "Mago"],
+        "carries": ["Ahri", "Yasuo", "Zed"],
+        "tanks": ["Shen", "Yasuo"]
+    },
+    {
+        "name": "DariusMain", 
+        "theme": "Noxus/Cavaliere", 
+        "color": (220, 50, 50),
+        "target_traits": ["Noxus", "Cavaliere", "Assassino"],
+        "carries": ["Darius", "Katarina"],
+        "tanks": ["Darius", "Garen", "Braum"]
+    },
+    {
+        "name": "CosmicVoyager", 
+        "theme": "Drago/Divino/Mago", 
+        "color": (140, 90, 240),
+        "target_traits": ["Drago", "Divino", "Mago"],
+        "carries": ["Aurelion", "Kayle", "Azir"],
+        "tanks": ["Shen", "Garen"]
+    },
+    {
+        "name": "SniperQueen", 
+        "theme": "Freljord/Cecchino", 
+        "color": (240, 180, 40),
+        "target_traits": ["Freljord", "Cecchino", "Guardiano"],
+        "carries": ["Ashe", "Ezreal"],
+        "tanks": ["Braum", "Sejuani"]
+    },
+    {
+        "name": "ShadowIsles", 
+        "theme": "Ombre/Guardiano", 
+        "color": (60, 220, 130),
+        "target_traits": ["Ombre delle Isole", "Guardiano", "Mago"],
+        "carries": ["Thresh", "Lux"],
+        "tanks": ["Thresh", "Shen", "Braum"]
+    },
 ]
 
 class BotPlayer:
     """
     Rappresenta un giocatore avversario controllato dall'AI nella Lobby a 8 Giocatori.
+    Implementa AI Tattica TFT:
+    - Composizioni e sinergie mirate
+    - Fusione ed equipaggiamento strategico degli oggetti
+    - Posizionamento su griglia intelligente (Frontline Tank / Backline Carry / Ali Assassini)
     """
-    def __init__(self, name, theme, color):
+    def __init__(self, name, theme, color, target_traits=None, carries=None, tanks=None):
         self.name = name
         self.theme = theme
         self.color = color
+        self.target_traits = target_traits or ["Cavaliere", "Mago"]
+        self.preferred_carries = carries or ["Lux", "Ashe", "Darius"]
+        self.preferred_tanks = tanks or ["Braum", "Garen", "Shen"]
         self.hp = 100
         self.max_hp = 100
         self.gold = 20
@@ -34,31 +90,36 @@ class BotPlayer:
         self.win_streak = 0
         self.loss_streak = 0
         self.board = [] # Lista di istanze Champion
-        self.items_bank = []
+        self.items_bank = [] # Componenti grezzi
         
     def get_team_power(self):
         """Calcola un punteggio di forza dell'armata per le simulazioni bot vs bot"""
-        power = self.level * 15
+        power = self.level * 18
         for c in self.board:
             stars = getattr(c, 'level', 1)
             cost = getattr(c, 'cost', 1)
-            power += (cost * 12) * (stars ** 1.6)
-            power += len(getattr(c, 'items', [])) * 14
+            power += (cost * 14) * (stars ** 1.7)
+            power += len(getattr(c, 'items', [])) * 18
         return power
 
     def update_progression(self, round_number, champions_db):
         """
-        Simula l'economia, i livelli, gli acquisti di campioni, upgrade a 2/3 stelle ed equipaggiamento oggetti.
+        Simula l'economia, i livelli, la selezione sinergica dei campioni, 
+        upgrade a 2/3 stelle, fusione intelligente degli oggetti e posizionamento tattico.
         """
         if not self.is_alive:
             return
 
-        # 1. Guadagno Oro ed XP
-        self.gold += 5 + min(5, self.gold // 10)
+        from items import combine_components
+
+        # 1. Guadagno Oro ed Economia Intelligente
+        interest = min(5, self.gold // 10)
+        self.gold += 5 + interest
         self.xp += 2
         
-        # Livellamento del bot in base al round
-        target_level = min(9, max(1, 1 + round_number // 2))
+        # Curva di Livellamento Realistica TFT
+        # Round 1-3: Lvl 2-3 | Round 4-5: Lvl 4-5 | Round 6-7: Lvl 6 | Round 8-10: Lvl 7 | Round 11+: Lvl 8-9
+        target_level = min(9, max(1, 1 + (round_number + 1) // 2))
         while self.level < target_level and self.gold >= 4:
             self.gold -= 4
             self.level += 1
@@ -67,40 +128,136 @@ class BotPlayer:
         if round_number in [1, 2, 3] or round_number % 3 == 0:
             self.items_bank.append(get_random_component_key())
 
-        # 3. Composizione Squadra coerente con il livello
+        # 3. Costruzione Squadra Sinergica basata sull'archetipo
         desired_slots = min(self.level, 7)
-        available_champs = [c for c in champions_db if c.cost <= min(5, 1 + self.level // 2)]
         
-        # Seleziona campioni tematici
-        if not self.board or len(self.board) < desired_slots:
-            while len(self.board) < desired_slots and available_champs:
-                chosen = random.choice(available_champs).copy()
-                # Probabilità stella 2 in base al round
-                if round_number >= 3 and random.random() < 0.45:
-                    chosen.level = 2
-                    chosen.hp = int(chosen.hp * 1.8)
-                    chosen.max_hp = chosen.hp
-                    chosen.base_attack = int(chosen.base_attack * 1.8)
-                if round_number >= 7 and random.random() < 0.20:
-                    chosen.level = 3
-                    chosen.hp = int(chosen.hp * 3.2)
-                    chosen.max_hp = chosen.hp
-                    chosen.base_attack = int(chosen.base_attack * 3.2)
-                self.board.append(chosen)
+        # Filtra i campioni adatti alla composizione del bot
+        thematic_pool = []
+        for c in champions_db:
+            if c.cost <= min(5, 1 + self.level // 2):
+                matches_trait = any(t in self.target_traits for t in getattr(c, 'traits', []))
+                is_fav = c.name in self.preferred_carries or c.name in self.preferred_tanks
+                if matches_trait or is_fav:
+                    thematic_pool.append(c)
+                    
+        if not thematic_pool:
+            thematic_pool = [c for c in champions_db if c.cost <= min(5, 1 + self.level // 2)]
 
-        # 4. Equipaggia oggetti sui campioni del bot
-        while self.items_bank and self.board:
-            item = self.items_bank.pop(0)
-            target_champ = random.choice(self.board)
-            if len(getattr(target_champ, 'items', [])) < 3:
-                target_champ.equip_item(item)
+        # Ricarica/aggiorna la board del bot
+        current_names = [c.name for c in self.board]
+        while len(self.board) < desired_slots and thematic_pool:
+            chosen_template = random.choice(thematic_pool)
+            chosen = chosen_template.copy()
+            
+            # Probabilità di upgrade stella basata sul round
+            star_roll = random.random()
+            if round_number >= 3 and star_roll < 0.50:
+                chosen.level = 2
+                chosen.hp = int(chosen.hp * 1.8)
+                chosen.max_hp = chosen.hp
+                chosen.base_attack = int(chosen.base_attack * 1.8)
+            if round_number >= 7 and star_roll < 0.22:
+                chosen.level = 3
+                chosen.hp = int(chosen.hp * 3.2)
+                chosen.max_hp = chosen.hp
+                chosen.base_attack = int(chosen.base_attack * 3.2)
+                
+            self.board.append(chosen)
 
-    def take_damage(self, dmg):
-        """Applica danno alla vita del bot e verifica eventuale eliminazione"""
-        self.hp = max(0, self.hp - dmg)
-        if self.hp == 0:
-            self.is_alive = False
-        return not self.is_alive
+        # 4. Fusione ed Equipaggiamento Intelligente degli Oggetti
+        while len(self.items_bank) >= 2:
+            c1 = self.items_bank.pop(0)
+            c2 = self.items_bank.pop(0)
+            completed_res = combine_components(c1, c2)
+            
+            if completed_res:
+                item_name = completed_res["name"]
+                bonus = completed_res.get("bonus", {})
+                
+                # Sceglie il miglior portatore in base alle statistiche dell'oggetto
+                is_tank_item = "defense" in bonus or "hp" in bonus or "magic_resist" in bonus
+                is_magic_item = "spell_power" in bonus or "mana_start" in bonus
+                
+                target_champ = None
+                if is_tank_item:
+                    # Cerca prima tra i Tank
+                    tank_candidates = [c for c in self.board if c.name in self.preferred_tanks and len(getattr(c, 'items', [])) < 3]
+                    if tank_candidates:
+                        target_champ = tank_candidates[0]
+                elif is_magic_item:
+                    # Cerca prima tra i Carry Maghi
+                    mage_candidates = [c for c in self.board if ("Mago" in getattr(c, 'traits', []) or c.name in self.preferred_carries) and len(getattr(c, 'items', [])) < 3]
+                    if mage_candidates:
+                        target_champ = mage_candidates[0]
+                else:
+                    # Oggetto AD / Attack Speed: assegna al carry fisico
+                    ad_candidates = [c for c in self.board if c.name in self.preferred_carries and len(getattr(c, 'items', [])) < 3]
+                    if ad_candidates:
+                        target_champ = ad_candidates[0]
+                        
+                # Fallback se non trova il candidato ideale
+                if not target_champ:
+                    available = [c for c in self.board if len(getattr(c, 'items', [])) < 3]
+                    if available:
+                        target_champ = random.choice(available)
+                        
+                if target_champ:
+                    target_champ.equip_item(item_name)
+            else:
+                # Se non combinabili, rimetti in banca
+                self.items_bank.append(c1)
+
+        # 5. Posizionamento Tattico su Griglia Hex (Frontline / Backline / Flank)
+        self.assign_tactical_positions()
+
+    def assign_tactical_positions(self):
+        """
+        Assegna le posizioni dei campioni sulla griglia nemica 7x2:
+        - Row 1 (Indici 7..13 - Prima Linea): Tank, Cavalieri, Guardiani, Picchiatori
+        - Row 0 (Indici 0..6 - Retroguardia): Cecchini, Maghi, Carry fragili
+        - Ali/Fianchi (0, 6, 7, 13): Assassini
+        """
+        frontline_slots = [10, 9, 11, 8, 12, 7, 13] # Centro prima linea preferito
+        backline_slots = [3, 2, 4, 1, 5, 0, 6]     # Centro/angoli retroguardia
+        flank_slots = [0, 6, 7, 13]
+        
+        used_slots = set()
+        
+        for champ in self.board:
+            traits = getattr(champ, 'traits', [])
+            name = champ.name
+            
+            is_tank = any(t in ["Cavaliere", "Guardiano", "Picchiatore"] for t in traits) or name in self.preferred_tanks
+            is_assassin = "Assassino" in traits or name in ["Zed", "Katarina"]
+            is_ranged = champ.attack_range > 1 or any(t in ["Cecchino", "Mago"] for t in traits)
+            
+            assigned_slot = None
+            if is_assassin:
+                for slot in flank_slots:
+                    if slot not in used_slots:
+                        assigned_slot = slot
+                        break
+            elif is_tank:
+                for slot in frontline_slots:
+                    if slot not in used_slots:
+                        assigned_slot = slot
+                        break
+            elif is_ranged:
+                for slot in backline_slots:
+                    if slot not in used_slots:
+                        assigned_slot = slot
+                        break
+                        
+            # Fallback se gli slot ideali sono pieni
+            if assigned_slot is None:
+                for slot in range(14):
+                    if slot not in used_slots:
+                        assigned_slot = slot
+                        break
+                        
+            if assigned_slot is not None:
+                used_slots.add(assigned_slot)
+                champ.board_index = assigned_slot
 
 
 class LobbyManager:
@@ -110,13 +267,28 @@ class LobbyManager:
     """
     def __init__(self, game):
         self.game = game
-        self.bots = [BotPlayer(b["name"], b["theme"], b["color"]) for b in BOT_NAMES_DATA]
+        self.bots = [
+            BotPlayer(
+                name=b["name"], 
+                theme=b["theme"], 
+                color=b["color"],
+                target_traits=b.get("target_traits"),
+                carries=b.get("carries"),
+                tanks=b.get("tanks")
+            ) for b in BOT_NAMES_DATA
+        ]
         self.current_opponent = None
         self.eliminated_count = 0
         
     def get_alive_bots(self):
         return [b for b in self.bots if b.is_alive]
         
+    def start_pve_round(self, round_number):
+        """Prepara e fa progredire tutti i bot durante i round PvE neutrali"""
+        for bot in self.bots:
+            bot.update_progression(round_number, self.game.champions_database)
+        self.current_opponent = None
+
     def start_round(self, round_number):
         """
         Prepara il matchmaking del round, fa progredire tutti i bot e seleziona l'avversario del giocatore.

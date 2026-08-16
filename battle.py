@@ -24,9 +24,12 @@ class BattleManager:
     Gestisce la logica e il rendering della battaglia IN TEMPO REALE
     con sprite 2D animati, particelle, proiettili e VFX abilità.
     """
-    def __init__(self, game, player_team_base, enemy_team_base, champions_database, opponent_name="Nemico"):
+    def __init__(self, game, player_team_base, enemy_team_base, champions_database, opponent_name="Nemico", is_pve=False, loot_orbs=None):
         self.game = game
         self.opponent_name = opponent_name
+        self.is_pve = is_pve
+        self.loot_orbs = loot_orbs or []
+        self.orbs_spawned = False
         self.champions_database = champions_database
         self.damage_meter = getattr(self.game, 'damage_meter', DamageMeter())
         self.battle_start_ticks = pygame.time.get_ticks()
@@ -129,6 +132,9 @@ class BattleManager:
         """
         battle_team = []
         for c in base_team:
+            if getattr(c, 'is_monster', False):
+                battle_team.append(c.copy())
+                continue
             
             # --- IL MARTELLO ---
             # Non ci fidiamo del campione 'c'. Cerchiamo il campione "vero"
@@ -183,7 +189,7 @@ class BattleManager:
         return battle_team
 
     def setup_board_positions(self):
-        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x4 responsive """
+        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x4 responsive con posizionamento tattico """
         sw = self.game.screen.get_width()
         sh = self.game.screen.get_height()
         cell_w, cell_h = 92, 92
@@ -197,11 +203,16 @@ class BattleManager:
             champ.x = offset_x + col * cell_w + cell_w // 2
             champ.y = offset_y + row * cell_h + cell_h // 2
                 
-        # Nemici random nelle prime due righe
+        # Nemici posizionati in base al loro board_index tattico (o fallback privo di sovrapposizioni)
         if self.enemy_team:
-            enemy_slots = random.sample(range(14), min(14, len(self.enemy_team)))
-            for i, champ in enumerate(self.enemy_team):
-                idx = enemy_slots[i]
+            used_enemy_slots = set()
+            for champ in self.enemy_team:
+                idx = getattr(champ, 'board_index', None)
+                if idx is None or idx in used_enemy_slots:
+                    available = [s for s in range(14) if s not in used_enemy_slots]
+                    idx = random.choice(available) if available else 0
+                used_enemy_slots.add(idx)
+                champ.board_index = idx
                 row = idx // 7
                 col = idx % 7
                 champ.x = offset_x + col * cell_w + cell_w // 2
@@ -209,6 +220,20 @@ class BattleManager:
 
     def handle_event(self, event):
         self.damage_meter.handle_event(event)
+        
+        # Apertura al click delle Sfere di Bottino (Loot Orbs)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for orb in self.loot_orbs:
+                if not orb.is_opened:
+                    dist = math.hypot(event.pos[0] - orb.x, event.pos[1] - orb.y)
+                    if dist <= orb.radius + 14:
+                        res = orb.open_orb(self.game)
+                        if res:
+                            from battle_animations import Particle
+                            for _ in range(25):
+                                ang = random.uniform(0, math.pi * 2)
+                                spd = random.uniform(60, 200)
+                                self.particles.append(Particle(orb.x, orb.y, math.cos(ang)*spd, math.sin(ang)*spd, orb.glow_color, lifetime=0.7, size=4))
 
     def update(self):
         """ Loop di update della battaglia, chiamato 60 volte al secondo """
@@ -386,6 +411,8 @@ class BattleManager:
                             tx = champ.target.x if champ.target else champ.x + 250
                             ty = champ.target.y if champ.target else champ.y
                             self.custom_vfx.append(HookChainVFX(champ.x, champ.y, tx, ty, duration=0.45))
+                        elif getattr(champ, 'is_monster', False):
+                            champ.use_ability(champ.target, self.player_team, self)
                     else:
                         # Attacco Base con Scatto Melee o Proiettile Ranged
                         champ.basic_attack(champ.target)
@@ -409,7 +436,22 @@ class BattleManager:
                                 for _ in range(6):
                                     self.particles.append(Particle(champ.target.x, champ.target.y, random.uniform(-60, 60), random.uniform(-60, 60), slash_col, radius=3, max_life=0.3))
         
-        # --- 3. CONTROLLO FINE BATTAGLIA ---
+        # --- 3. GESTIONE SFERE DI BOTTINO (PVE) & FINE BATTAGLIA ---
+        if self.is_pve and not any(c.is_alive() for c in self.enemy_team) and not self.orbs_spawned:
+            sw = self.game.screen.get_width()
+            sh = self.game.screen.get_height()
+            cx = sw // 2
+            cy = int(sh * 0.38)
+            n = len(self.loot_orbs)
+            for i, orb in enumerate(self.loot_orbs):
+                orb.x = cx - (n - 1) * 45 + i * 90
+                orb.y = cy
+                orb.base_y = cy
+            self.orbs_spawned = True
+
+        for orb in self.loot_orbs:
+            orb.update(delta_time)
+
         if not any(c.is_alive() for c in self.enemy_team):
             self.is_over = True
             self.winner = "player"
@@ -460,7 +502,15 @@ class BattleManager:
         head_rect = pygame.Rect((sw - head_w) // 2, 14, head_w, 44)
         draw_glass_panel(surface, head_rect, border_radius=22, bg_color=(14, 18, 28, 230), border_color=(230, 190, 70, 190), border_width=1)
         head_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 15, bold=True)
-        draw_text(f"VS {self.opponent_name.upper()} - SCONTRO IN CORSO", head_font, GOLD, surface, head_rect.centerx, head_rect.centery)
+        
+        if self.is_pve:
+            head_title = f"{self.opponent_name.upper()} - ROUND PVE"
+            head_color = (255, 195, 65)
+        else:
+            head_title = f"VS {self.opponent_name.upper()} - SCONTRO IN CORSO"
+            head_color = GOLD
+            
+        draw_text(head_title, head_font, head_color, surface, head_rect.centerx, head_rect.centery)
         
         # 3. Sidebar Sinistra (Augments, Sinergie, Damage Meter) & Sidebar Destra (Classifica)
         mouse_pos = pygame.mouse.get_pos()
@@ -590,6 +640,10 @@ class BattleManager:
                 if popup["timer"] <= 0:
                     champ.damage_popup_texts.remove(popup)
 
+        # 11. Disegna Sfere di Bottino Fluttuanti (Loot Orbs PvE)
+        for orb in self.loot_orbs:
+            orb.draw(surface)
+
         # 12. Scheda Dettaglio / Ispettore Campione (se attivo)
         if self.inspected_champion and hasattr(self.game, 'shop_manager'):
             self.game.shop_manager.draw_champion_inspector(surface, self.inspected_champion)
@@ -597,6 +651,26 @@ class BattleManager:
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         
+        # 1. Damage meter tab toggle
+        if self.damage_meter.handle_event(event):
+            return
+
+        # 2. Click per aprire Sfere di Bottino (Loot Orbs)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for orb in self.loot_orbs:
+                if not orb.is_opened:
+                    dist = math.hypot(event.pos[0] - orb.x, event.pos[1] - orb.y)
+                    if dist <= orb.radius + 14:
+                        res = orb.open_orb(self.game)
+                        if res:
+                            from battle_animations import Particle
+                            for _ in range(25):
+                                ang = random.uniform(0, math.pi * 2)
+                                spd = random.uniform(60, 200)
+                                self.particles.append(Particle(orb.x, orb.y, math.cos(ang)*spd, math.sin(ang)*spd, orb.glow_color, lifetime=0.7, size=4))
+                        return
+
+        # 3. Gestione Ispettore Campione
         if self.inspected_champion:
             if event.type == pygame.KEYDOWN and event.key in [pygame.K_ESCAPE, pygame.K_SPACE]:
                 self.inspected_champion = None
@@ -612,6 +686,7 @@ class BattleManager:
                 sm = getattr(self.game, 'shop_manager', None)
                 if sm and not sm.inspector_rect.collidepoint(mouse_pos):
                     self.inspected_champion = None
+                    return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             # Click destro su un campione in combattimento per ispezionarlo

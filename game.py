@@ -291,7 +291,22 @@ class Game:
                 
         print("Avvio battaglia con:", [c.name for c in active_champs])
         
-        # Matchmaking e progressione con Lobby 8 Giocatori
+        from monsters import is_pve_round, get_pve_encounter
+        
+        # 1. Incontro PvE (Mostri Neutrali & Boss)
+        if is_pve_round(self.round_number):
+            enc = get_pve_encounter(self.round_number)
+            print(f"🐉 Matchmaking PvE: Affronti {enc['name']}!")
+            self.lobby_manager.start_pve_round(self.round_number)
+            self.battle_manager = BattleManager(
+                self, active_champs, enc["monsters"], 
+                self.champions_database, opponent_name=enc["name"], 
+                is_pve=True, loot_orbs=enc["orbs"]
+            )
+            self.game_state = "BATTLE"
+            return
+        
+        # 2. Matchmaking e progressione con Lobby 8 Giocatori (PvP)
         opponent_bot = self.lobby_manager.start_round(self.round_number)
         
         if not opponent_bot:
@@ -306,12 +321,24 @@ class Game:
         enemy_team_to_battle = [c.copy() for c in opponent_bot.board]
         
         # Passa il riferimento a game, database e nome avversario al BattleManager
-        self.battle_manager = BattleManager(self, active_champs, enemy_team_to_battle, self.champions_database, opponent_name=opponent_bot.name) 
+        self.battle_manager = BattleManager(
+            self, active_champs, enemy_team_to_battle, 
+            self.champions_database, opponent_name=opponent_bot.name,
+            is_pve=False
+        ) 
         self.game_state = "BATTLE"
 
     def end_battle(self, winner):
         self.last_battle_winner = winner
         self.game_state = "RESULT"
+        
+        is_pve = self.battle_manager and getattr(self.battle_manager, 'is_pve', False)
+        
+        # Se c'erano sfere di bottino ancora non aperte alla fine del combattimento, aprile automaticamente
+        if is_pve and self.battle_manager:
+            for orb in getattr(self.battle_manager, 'loot_orbs', []):
+                if not orb.is_opened:
+                    orb.open_orb(self)
         
         # Salva report per Damage Meter
         if self.battle_manager:
@@ -322,8 +349,9 @@ class Game:
         surviving_player = sum(1 for c in getattr(self.battle_manager, 'player_team', []) if c.is_alive()) if self.battle_manager else 1
         surviving_enemy = sum(1 for c in getattr(self.battle_manager, 'enemy_team', []) if c.is_alive()) if self.battle_manager else 0
         
-        # Risolvi la partita nella Lobby 8 Giocatori
-        self.lobby_manager.resolve_player_match(winner, surviving_player, surviving_enemy, self.round_number)
+        # Risolvi la partita nella Lobby 8 Giocatori (solo se PvP)
+        if not is_pve:
+            self.lobby_manager.resolve_player_match(winner, surviving_player, surviving_enemy, self.round_number)
         
         base_income = 5
         max_interest_cap = 7 if "rich_get_richer" in self.player_augments else 5
@@ -359,7 +387,7 @@ class Game:
             self.audio.play_sfx("defeat")
             print(f"Sconfitta! Oro: {self.player_gold} (+{round_gold}), HP: {self.player_hp} (-{damage_taken})")
             
-        opp_name = self.lobby_manager.current_opponent.name if self.lobby_manager.current_opponent else "Bot"
+        opp_name = self.battle_manager.opponent_name if (self.battle_manager and is_pve) else (self.lobby_manager.current_opponent.name if self.lobby_manager.current_opponent else "Bot")
         
         # Controllo condizioni di fine partita (Game Over o Vittoria 1° Posto)
         if self.player_hp <= 0:
@@ -379,6 +407,7 @@ class Game:
             "damage": damage_taken,
             "round": self.round_number,
             "opponent": opp_name,
+            "is_pve": is_pve,
             "is_game_finished": self.is_game_finished,
             "placement": self.player_placement
         }
@@ -388,13 +417,6 @@ class Game:
             print("🌱 IPER-CRESCITA: +2 XP gratuiti extra!")
         self.player_xp += 2 + extra_xp
         self.check_level_up()
-        
-        # Drop Oggetti: nei round 1, 2, 3 e poi ogni 3 round
-        if self.round_number <= 3 or self.round_number % 3 == 0:
-            if len(self.player_items) < 8:
-                dropped = get_random_component_key()
-                self.player_items.append(dropped)
-                print(f"🎁 DROP OGGETTO! Hai ottenuto: {dropped}")
         
         # Incrementa il round
         self.round_number += 1
@@ -438,8 +460,10 @@ class Game:
         
         round_idx = self.last_round_stats.get("round", self.round_number - 1)
         opp_name = self.last_round_stats.get("opponent", "Avversario")
+        is_pve = self.last_round_stats.get("is_pve", False)
         sub_font = pygame.font.SysFont(["Helvetica Neue", "Arial", "sans-serif"], 13, bold=True)
-        draw_text(f"ROUND {round_idx} - VS {opp_name.upper()}", sub_font, (180, 200, 230), self.screen, sw // 2, sh // 2 - 100)
+        sub_text = f"ROUND {round_idx} (PVE) - {opp_name.upper()}" if is_pve else f"ROUND {round_idx} - VS {opp_name.upper()}"
+        draw_text(sub_text, sub_font, (180, 200, 230), self.screen, sw // 2, sh // 2 - 100)
         
         # Statistiche Round
         stats_y = sh // 2 - 70
