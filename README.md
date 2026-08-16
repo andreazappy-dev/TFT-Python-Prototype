@@ -84,7 +84,7 @@ The engine is decoupled into specialized subsystems communicating through a cent
 ```
 ├── game.py                 # Main entry point & State Machine Orchestrator
 ├── carousel.py             # Shared Carousel Draft Phase, orbital physics & Little Legend
-├── config.py               # Resolution (1400x900), color palettes, font loaders
+├── config.py               # Resolution (1920x1080 Full HD), color palettes, font loaders
 ├── champions.py            # Champion classes, base attributes, combat stats & abilities
 ├── traits.py               # Sinergies system, thresholds, buff calculations & HUD
 ├── items.py                # Item recipes, combination logic & stat buffs

@@ -2,10 +2,7 @@
 import math
 import random
 import pygame
-from config import (
-    WIDTH, HEIGHT, GOLD, WHITE, BLACK, RED, GREEN, BLUE, LIGHT_BLUE,
-    TEXT_FONT, SMALL_FONT, MICRO_FONT, HEADER_FONT, TITLE_FONT, BUTTON_FONT, draw_text
-)
+from config import draw_text, draw_star, GOLD, WHITE, BLACK, BLUE, LIGHT_BLUE, RED, GREEN, GRAY, WIDTH, HEIGHT
 from items import get_random_component_key, get_item_data, draw_item_icon, get_item_icon_surface
 from asset_loader import get_background_image, draw_glass_panel, get_champion_sprite
 from battle_animations import Particle
@@ -540,7 +537,7 @@ class CarouselManager:
         pygame.draw.circle(arena_surf, (245, 200, 60, 220), (self.center_x, self.center_y), 50, width=2)
         
         surface.blit(arena_surf, (0, 0))
-        draw_text("✨", pygame.font.SysFont("Segoe UI Emoji", 26), GOLD, surface, self.center_x, self.center_y)
+        draw_star(surface, self.center_x, self.center_y, radius=18, color=GOLD)
 
         # 3. Disegna i Campioni del Carosello
         for c_champ in self.carousel_champs:
@@ -558,7 +555,7 @@ class CarouselManager:
         header_rect = pygame.Rect(WIDTH // 2 - 320, 20, 640, 56)
         draw_glass_panel(surface, header_rect, border_radius=28, bg_color=(12, 16, 28, 235), border_color=(230, 190, 65, 220), border_width=2)
         
-        title_text = f"CAROSELLO CONDIVISO • ROUND {self.round_number}"
+        title_text = f"CAROSELLO CONDIVISO - ROUND {self.round_number}"
         draw_text(title_text, pygame.font.SysFont("Arial", 22, bold=True), GOLD, surface, header_rect.centerx, header_rect.centery)
 
         # Banner Conto alla Rovescia / Guida

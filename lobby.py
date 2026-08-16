@@ -355,7 +355,7 @@ class LobbyManager:
         
         # Nome e Livello
         draw_text(bot_data["name"], HEADER_FONT, bot_data["color"], surface, tip_x + 12, tip_y + 14, center=False)
-        draw_text(f"Livello {bot_data['level']} • {bot_data['hp']} HP", SMALL_FONT, (190, 200, 220), surface, tip_x + 12, tip_y + 34, center=False)
+        draw_text(f"Livello {bot_data['level']} - {bot_data['hp']} HP", SMALL_FONT, (190, 200, 220), surface, tip_x + 12, tip_y + 34, center=False)
         
         # Sinergie del bot
         traits = calculate_team_traits(bot_data["board"])
@@ -368,7 +368,7 @@ class LobbyManager:
         
         # Campioni schierati
         draw_text("Composizione:", SMALL_FONT, GOLD, surface, tip_x + 12, tip_y + 92, center=False)
-        roster_names = [f"{c.name} ({getattr(c, 'level', 1)}★)" for c in bot_data["board"]]
+        roster_names = [f"{c.name} (Lvl {getattr(c, 'level', 1)})" for c in bot_data["board"]]
         for idx, r_name in enumerate(roster_names[:3]):
             draw_text(r_name, MICRO_FONT, (220, 230, 245), surface, tip_x + 12, tip_y + 110 + idx * 14, center=False)
         if len(roster_names) > 3:

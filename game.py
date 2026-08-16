@@ -189,7 +189,7 @@ class Game:
         draw_text("MINI TFT", TITLE_FONT, (255, 240, 180), self.screen, WIDTH // 2, HEIGHT // 2 - 130)
         
         sub_font = pygame.font.SysFont("Arial", 16, bold=True)
-        draw_text("TACTICAL AUTO-BATTLER • PROTOTYPE", sub_font, (170, 200, 240), self.screen, WIDTH // 2, HEIGHT // 2 - 65)
+        draw_text("TACTICAL AUTO-BATTLER - PROTOTYPE", sub_font, (170, 200, 240), self.screen, WIDTH // 2, HEIGHT // 2 - 65)
         draw_text("by andreazappy-dev", TEXT_FONT, (140, 150, 170), self.screen, WIDTH // 2, HEIGHT // 2 - 35)
 
         # 4. Bottone GIOCA Curvo & Luminoso
@@ -210,10 +210,10 @@ class Game:
         draw_text("GIOCA", HEADER_FONT, WHITE, self.screen, WIDTH // 2, HEIGHT // 2 + 42)
         
         # 5. Pillola Comandi Rapidi in basso
-        tip_rect = pygame.Rect(WIDTH // 2 - 320, HEIGHT - 65, 640, 36)
+        tip_rect = pygame.Rect(WIDTH // 2 - 350, HEIGHT - 65, 700, 36)
         draw_glass_panel(self.screen, tip_rect, border_radius=18, bg_color=(15, 18, 25, 200), border_color=(80, 100, 130, 150), border_width=1)
         tip_font = pygame.font.SysFont("Arial", 12, bold=True)
-        draw_text("[M] Muto Audio   •   [Drag & Drop] Schiera / Equipaggia   •   [Click DX] Vendi", tip_font, (210, 220, 240), self.screen, WIDTH // 2, HEIGHT - 47)
+        draw_text("[M] Muto Audio   |   [Click SX] Schiera / Compra   |   [Click DX] Scheda Info", tip_font, (210, 220, 240), self.screen, WIDTH // 2, HEIGHT - 47)
 
     def handle_menu_events(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -414,7 +414,7 @@ class Game:
         round_idx = self.last_round_stats.get("round", self.round_number - 1)
         opp_name = self.last_round_stats.get("opponent", "Avversario")
         sub_font = pygame.font.SysFont("Arial", 14, bold=True)
-        draw_text(f"ROUND {round_idx} • VS {opp_name.upper()}", sub_font, (180, 200, 230), self.screen, WIDTH // 2, HEIGHT // 2 - 110)
+        draw_text(f"ROUND {round_idx} - VS {opp_name.upper()}", sub_font, (180, 200, 230), self.screen, WIDTH // 2, HEIGHT // 2 - 110)
         
         # Statistiche Round
         stats_y = HEIGHT // 2 - 75

@@ -5,7 +5,7 @@ import copy
 import math
 
 # Importiamo da config.py
-from config import draw_text, TEXT_FONT, GREEN, RED, BLUE, BLACK, WHITE, GOLD
+from config import draw_text, draw_star, draw_cross, TEXT_FONT, GREEN, RED, BLUE, BLACK, WHITE, GOLD, WIDTH, HEIGHT
 
 # Importiamo la classe Champion aggiornata
 from champions import Champion, SPRITE_SIZE
@@ -183,9 +183,10 @@ class BattleManager:
         return battle_team
 
     def setup_board_positions(self):
-        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x4 """
-        cell_w, cell_h = 100, 100
-        offset_x, offset_y = 350, 250 # Centro dello schermo 1400x900
+        """ Assegna le posizioni X, Y iniziali ai campioni su una griglia 7x4 per 1920x1080 """
+        cell_w, cell_h = 110, 110
+        offset_x = (WIDTH - (7 * cell_w)) // 2
+        offset_y = 260
         
         for champ in self.player_team:
             idx = getattr(champ, 'board_index', 0)
@@ -450,25 +451,25 @@ class BattleManager:
         surface.blit(overlay, (0, 0))
         
         # 2. Header Battaglia Glassmorphism
-        head_rect = pygame.Rect(surface.get_width() // 2 - 250, 16, 500, 44)
-        draw_glass_panel(surface, head_rect, border_radius=22, bg_color=(14, 18, 28, 220), border_color=(230, 190, 70, 180), border_width=1)
-        head_font = pygame.font.SysFont("Arial", 15, bold=True)
-        draw_text(f"VS {self.opponent_name.upper()} • SCONTRO IN CORSO", head_font, GOLD, surface, head_rect.centerx, head_rect.centery)
+        head_rect = pygame.Rect(surface.get_width() // 2 - 300, 16, 600, 48)
+        draw_glass_panel(surface, head_rect, border_radius=24, bg_color=(14, 18, 28, 230), border_color=(230, 190, 70, 190), border_width=1)
+        head_font = pygame.font.SysFont("Arial", 16, bold=True)
+        draw_text(f"VS {self.opponent_name.upper()} - SCONTRO IN CORSO", head_font, GOLD, surface, head_rect.centerx, head_rect.centery)
         
         # 3. Sidebar Sinergie a sinistra & Classifica a destra & Damage Meter
         mouse_pos = pygame.mouse.get_pos()
-        draw_hud_augments(surface, mouse_pos, getattr(self.game, 'player_augments', []), start_x=12, start_y=30)
+        draw_hud_augments(surface, mouse_pos, getattr(self.game, 'player_augments', []), start_x=24, start_y=30)
         traits_count = len(getattr(self, "player_traits", []))
-        meter_y = max(390, 75 + traits_count * 44 + 36)
+        meter_y = max(420, 80 + traits_count * 44 + 36)
         elapsed_sec = max(0.5, (pygame.time.get_ticks() - self.battle_start_ticks) / 1000.0)
-        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=12, start_y=meter_y)
+        self.damage_meter.draw(surface, mouse_pos, self.player_team, elapsed_seconds=elapsed_sec, start_x=24, start_y=meter_y)
         
         if hasattr(self.game, 'lobby_manager'):
-            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=1230, start_y=75)
+            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=1630, start_y=75)
         
         # 4. Campo di battaglia a griglia curva (7x4)
-        cell_w, cell_h = 100, 100
-        offset_x, offset_y = 350, 230
+        cell_w, cell_h = 110, 110
+        offset_x, offset_y = (WIDTH - (7 * cell_w)) // 2, 260
         cols, rows = 7, 4
         
         for r in range(rows):
@@ -477,11 +478,11 @@ class BattleManager:
                 cell_surf = pygame.Surface((cell_w, cell_h), pygame.SRCALPHA)
                 
                 if r >= 2:
-                    pygame.draw.rect(cell_surf, (18, 38, 26, 210), (2, 2, cell_w - 4, cell_h - 4), border_radius=12) # Lato Player
-                    pygame.draw.rect(cell_surf, (45, 160, 80, 140), (2, 2, cell_w - 4, cell_h - 4), width=1, border_radius=12)
+                    pygame.draw.rect(cell_surf, (18, 38, 26, 210), (2, 2, cell_w - 4, cell_h - 4), border_radius=14) # Lato Player
+                    pygame.draw.rect(cell_surf, (45, 160, 80, 140), (2, 2, cell_w - 4, cell_h - 4), width=1, border_radius=14)
                 else:
-                    pygame.draw.rect(cell_surf, (38, 18, 20, 210), (2, 2, cell_w - 4, cell_h - 4), border_radius=12) # Lato Enemy
-                    pygame.draw.rect(cell_surf, (200, 60, 60, 140), (2, 2, cell_w - 4, cell_h - 4), width=1, border_radius=12)
+                    pygame.draw.rect(cell_surf, (38, 18, 20, 210), (2, 2, cell_w - 4, cell_h - 4), border_radius=14) # Lato Enemy
+                    pygame.draw.rect(cell_surf, (200, 60, 60, 140), (2, 2, cell_w - 4, cell_h - 4), width=1, border_radius=14)
                     
                 surface.blit(cell_surf, (rect.x, rect.y))
 
@@ -527,14 +528,13 @@ class BattleManager:
                 surface.blit(sprite_surf, (cx - sprite_surf.get_width() // 2, cy - sprite_surf.get_height() // 2))
                 
                 if champ.is_alive():
-                    # Indicatore Stelle (★)
+                    # Indicatore Stelle Vettoriale
                     stars = getattr(champ, 'level', 1)
                     if stars >= 2:
                         for s in range(min(stars, 3)):
-                            sx = cx - (stars - 1) * 7 + s * 14
+                            sx = cx - (stars - 1) * 8 + s * 16
                             sy = cy - 58
-                            pygame.draw.circle(surface, GOLD, (sx, sy), 4)
-                            pygame.draw.circle(surface, (0, 0, 0), (sx, sy), 4, width=1)
+                            draw_star(surface, sx, sy, radius=5, color=GOLD)
 
                     # Barre HP e Mana
                     self.draw_hp_bar(surface, champ, cx, cy)

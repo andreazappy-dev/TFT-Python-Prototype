@@ -8,34 +8,33 @@ from augments import draw_hud_augments
 
 # Importo da config.py
 from config import (
-    draw_text, TEXT_FONT, BUTTON_FONT, TITLE_FONT, 
+    draw_text, draw_star, draw_cross,
+    TEXT_FONT, BUTTON_FONT, TITLE_FONT, SUBTITLE_FONT, HEADER_FONT, SMALL_FONT, MICRO_FONT,
     BLUE, LIGHT_BLUE, GRAY, GOLD, BLACK, GREEN, WHITE, RED, WIDTH, HEIGHT
 )
 
 class ShopManager:
     """
-    Gestisce la logica e il rendering dello shop.
+    Gestisce la logica e il rendering dello shop su risoluzione 1920x1080 senza scroll.
     È controllato da game.py
     """
     def __init__(self, game, champions_database):
         self.game = game  # Riferimento alla classe Game principale
         self.shop_size = 5
-        self.card_size = (165, 205)
-        self.spacing_x = 205
-        self.margin_y = 86
+        self.card_size = (200, 240)
+        self.spacing_x = 230
+        self.margin_y = 80
         
         self.champions_pool = champions_database
         self.shop_champs = [] # I 5 campioni in vendita
         
-        # Riferimenti ai bottoni per i click
-        screen_width = self.game.screen.get_width()
-        screen_height = self.game.screen.get_height()
-        self.buy_xp_button_rect = pygame.Rect(screen_width//2 - 350, screen_height - 68, 210, 48)
-        self.refresh_button_rect = pygame.Rect(screen_width//2 - 120, screen_height - 68, 180, 48)
-        self.confirm_button_rect = pygame.Rect(screen_width//2 + 80, screen_height - 68, 220, 48)
+        # Riferimenti ai bottoni per i click (Fissati per 1920x1080)
+        self.buy_xp_button_rect = pygame.Rect(WIDTH//2 - 400, 1005, 230, 54)
+        self.refresh_button_rect = pygame.Rect(WIDTH//2 - 130, 1005, 210, 54)
+        self.confirm_button_rect = pygame.Rect(WIDTH//2 + 130, 1005, 250, 54)
         
         # Area Cestino di Vendita Dinamica (stile TFT durante il drag)
-        self.sell_zone_rect = pygame.Rect(screen_width//2 - 240, screen_height - 68, 480, 48)
+        self.sell_zone_rect = pygame.Rect(WIDTH//2 - 320, 995, 640, 64)
         
         self.buy_buttons = []
 
@@ -50,10 +49,11 @@ class ShopManager:
         self.dragged_item_idx = -1
         self.dragged_item_key = None
         
-        # --- Ispettore Campione su Click ---
+        # --- Ispettore Campione su Click DX ---
         self.inspected_champion = None
-        self.inspector_rect = pygame.Rect(0, 0, 540, 660)
-        self.inspector_close_rect = pygame.Rect(0, 0, 36, 36)
+        modal_w, modal_h = 620, 750
+        self.inspector_rect = pygame.Rect((WIDTH - modal_w)//2, (HEIGHT - modal_h)//2, modal_w, modal_h)
+        self.inspector_close_rect = pygame.Rect(self.inspector_rect.right - 46, self.inspector_rect.top + 16, 32, 32)
         
         self.scroll_y = 0
 
@@ -445,10 +445,14 @@ class ShopManager:
             self.dragged_champ = None
             return
 
-        # Se lo slot è occupato, esegui lo scambio
-        champ_in_slot = target_list[target_index]
-        target_list[target_index] = self.dragged_champ
-        self.dragged_from_list[self.dragged_from_index] = champ_in_slot
+        if target_list is self.dragged_from_list and target_index == self.dragged_from_index:
+            # Stesso identico slot (click singolo o rilascio sullo stesso posto): rimetti il campione al suo posto!
+            target_list[target_index] = self.dragged_champ
+        else:
+            # Slot differente: esegui swap se occupato, altrimenti piazza
+            champ_in_slot = target_list[target_index]
+            target_list[target_index] = self.dragged_champ
+            self.dragged_from_list[self.dragged_from_index] = champ_in_slot
             
         self.is_dragging = False
         self.dragged_champ = None
@@ -467,10 +471,10 @@ class ShopManager:
 
     def get_board_rects(self):
         rects = []
-        cell_w, cell_h = 100, 100
+        cell_w, cell_h = 105, 105
         cols, rows = 7, 2
-        x_start = (self.game.screen.get_width() - (cols * cell_w)) // 2
-        y_start = self.game.screen.get_height() - 400 + self.scroll_y
+        x_start = (WIDTH - (cols * cell_w)) // 2
+        y_start = 390
         
         for r in range(rows):
             for c in range(cols):
@@ -481,9 +485,9 @@ class ShopManager:
         
     def get_bench_rects(self):
         rects = []
-        cell_w, cell_h = 100, 100
-        x_start = (self.game.screen.get_width() - (self.game.bench_slots * cell_w)) // 2
-        y = self.game.screen.get_height() - 150 + self.scroll_y
+        cell_w, cell_h = 105, 105
+        x_start = (WIDTH - (self.game.bench_slots * cell_w)) // 2
+        y = 660
         for i in range(self.game.bench_slots):
             x = x_start + i * cell_w
             rects.append(pygame.Rect(x, y, cell_w, cell_h))
@@ -491,10 +495,10 @@ class ShopManager:
 
     def get_item_bench_rects(self):
         rects = []
-        slot_size = 44
-        spacing = 6
-        x_start = 20
-        y_start = self.game.screen.get_height() - 105 + self.scroll_y
+        slot_size = 50
+        spacing = 8
+        x_start = 24
+        y_start = 875
         for i in range(8):
             col = i % 4
             row = i // 4
@@ -515,102 +519,99 @@ class ShopManager:
 
     def draw(self, surface):
         mouse_pos = pygame.mouse.get_pos()
+        sw = surface.get_width()
+        sh = surface.get_height()
         
         # --- 1. SFONDO ARENA AI ---
-        bg_surf = get_background_image("board_bg", surface.get_width(), surface.get_height())
+        bg_surf = get_background_image("board_bg", sw, sh)
         surface.blit(bg_surf, (0, 0))
         
         # Overlay scuro per contrasto
-        overlay = pygame.Surface((surface.get_width(), surface.get_height()), pygame.SRCALPHA)
+        overlay = pygame.Surface((sw, sh), pygame.SRCALPHA)
         overlay.fill((10, 14, 22, 145))
         surface.blit(overlay, (0, 0))
         
         # --- 2. TOP BAR (STATO GIOCATORE CON PILLOLE CURVE) ---
-        top_bar_rect = pygame.Rect(surface.get_width() // 2 - 490, 12, 980, 50)
-        draw_glass_panel(surface, top_bar_rect, border_radius=25, bg_color=(12, 16, 26, 220), border_color=(190, 160, 65, 170), border_width=1)
-        
-        stat_font = pygame.font.SysFont("Arial", 14, bold=True)
-        small_font = pygame.font.SysFont("Arial", 11, bold=True)
+        top_bar_rect = pygame.Rect(sw // 2 - 540, 14, 1080, 52)
+        draw_glass_panel(surface, top_bar_rect, border_radius=26, bg_color=(12, 16, 26, 230), border_color=(190, 160, 65, 180), border_width=1)
         
         # Pillola HP
-        hp_rect = pygame.Rect(top_bar_rect.x + 18, 19, 115, 36)
-        draw_glass_panel(surface, hp_rect, border_radius=18, bg_color=(25, 55, 35, 230), border_color=(60, 200, 100, 200), border_width=1)
-        draw_text(f"HP: {self.game.player_hp}", stat_font, (120, 255, 160), surface, hp_rect.centerx, hp_rect.centery)
+        hp_rect = pygame.Rect(top_bar_rect.x + 20, 20, 125, 40)
+        draw_glass_panel(surface, hp_rect, border_radius=20, bg_color=(25, 55, 35, 230), border_color=(60, 200, 100, 200), border_width=1)
+        draw_text(f"HP: {self.game.player_hp}", HEADER_FONT, (120, 255, 160), surface, hp_rect.centerx, hp_rect.centery)
         
         # Pillola Oro
-        gold_rect = pygame.Rect(top_bar_rect.x + 148, 19, 120, 36)
-        draw_glass_panel(surface, gold_rect, border_radius=18, bg_color=(55, 45, 15, 230), border_color=(255, 215, 60, 220), border_width=1)
-        draw_text(f"ORO: {self.game.player_gold}g", stat_font, GOLD, surface, gold_rect.centerx, gold_rect.centery)
+        gold_rect = pygame.Rect(top_bar_rect.x + 160, 20, 130, 40)
+        draw_glass_panel(surface, gold_rect, border_radius=20, bg_color=(55, 45, 15, 230), border_color=(255, 215, 60, 220), border_width=1)
+        draw_text(f"ORO: {self.game.player_gold}g", HEADER_FONT, GOLD, surface, gold_rect.centerx, gold_rect.centery)
         
         # Pillola Round
-        round_rect = pygame.Rect(top_bar_rect.right - 145, 19, 125, 36)
-        draw_glass_panel(surface, round_rect, border_radius=18, bg_color=(35, 40, 55, 230), border_color=(140, 160, 200, 200), border_width=1)
-        draw_text(f"ROUND: {self.game.round_number}", stat_font, (220, 235, 255), surface, round_rect.centerx, round_rect.centery)
+        round_rect = pygame.Rect(top_bar_rect.right - 155, 20, 135, 40)
+        draw_glass_panel(surface, round_rect, border_radius=20, bg_color=(35, 40, 55, 230), border_color=(140, 160, 200, 200), border_width=1)
+        draw_text(f"ROUND: {self.game.round_number}", HEADER_FONT, (220, 235, 255), surface, round_rect.centerx, round_rect.centery)
         
         # Pillola Livello & Barra XP
-        lvl_rect = pygame.Rect(top_bar_rect.x + 282, 19, 390, 36)
-        draw_glass_panel(surface, lvl_rect, border_radius=18, bg_color=(20, 35, 55, 230), border_color=(60, 140, 240, 200), border_width=1)
+        lvl_rect = pygame.Rect(top_bar_rect.x + 305, 20, 450, 40)
+        draw_glass_panel(surface, lvl_rect, border_radius=20, bg_color=(20, 35, 55, 230), border_color=(60, 140, 240, 200), border_width=1)
         
         curr_xp = self.game.player_xp
         max_xp = self.game.xp_to_level.get(self.game.player_level, 999)
-        draw_text(f"LVL {self.game.player_level}", stat_font, (140, 210, 255), surface, lvl_rect.x + 48, lvl_rect.centery)
+        draw_text(f"LVL {self.game.player_level}", HEADER_FONT, (140, 210, 255), surface, lvl_rect.x + 55, lvl_rect.centery)
         
         # Barra di avanzamento XP
-        bar_x = lvl_rect.x + 105
-        bar_y = lvl_rect.centery - 7
-        bar_w = 200
-        bar_h = 14
-        pygame.draw.rect(surface, (15, 20, 30), (bar_x, bar_y, bar_w, bar_h), border_radius=7)
+        bar_x = lvl_rect.x + 120
+        bar_y = lvl_rect.centery - 8
+        bar_w = 230
+        bar_h = 16
+        pygame.draw.rect(surface, (15, 20, 30), (bar_x, bar_y, bar_w, bar_h), border_radius=8)
         if max_xp > 0:
             pct = min(1.0, curr_xp / max_xp)
             if pct > 0:
-                pygame.draw.rect(surface, (40, 160, 255), (bar_x, bar_y, int(bar_w * pct), bar_h), border_radius=7)
-        pygame.draw.rect(surface, (100, 180, 255), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=7)
-        draw_text(f"{curr_xp}/{max_xp} XP", small_font, WHITE, surface, bar_x + bar_w // 2, lvl_rect.centery)
+                pygame.draw.rect(surface, (40, 160, 255), (bar_x, bar_y, int(bar_w * pct), bar_h), border_radius=8)
+        pygame.draw.rect(surface, (100, 180, 255), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=8)
+        draw_text(f"{curr_xp}/{max_xp} XP", SMALL_FONT, WHITE, surface, bar_x + bar_w // 2, lvl_rect.centery)
 
-        # --- 3. RACK NEGOZIO (CARTE CAMPIONI CURVE SENZA SOVRAPPOSIZIONI) ---
-        shop_rack_rect = pygame.Rect(200, self.margin_y + self.scroll_y - 8, 1040, self.card_size[1] + 16)
+        # --- 3. RACK NEGOZIO (5 CARTE CAMPIONI 1920x1080) ---
+        shop_rack_rect = pygame.Rect(375, self.margin_y - 6, 1170, self.card_size[1] + 12)
         draw_glass_panel(surface, shop_rack_rect, border_radius=20, bg_color=(12, 16, 25, 210), border_color=(70, 85, 110, 140), border_width=1)
         
         self.buy_buttons.clear() 
         for i, champ in enumerate(self.shop_champs):
-            x = 215 + i * self.spacing_x
-            y = self.margin_y + self.scroll_y
+            x = 385 + i * self.spacing_x
+            y = self.margin_y
             card_rect = pygame.Rect(x, y, *self.card_size)
             
             if champ: 
-                # 1. Sfondo Card Completa
+                # Sfondo Card
                 pygame.draw.rect(surface, (18, 22, 32), card_rect, border_radius=14)
                 
-                # 2. Illustrazione del Campione (Sezione superiore)
-                img_h = 108
+                # Illustrazione del Campione
+                img_h = 125
                 card_img = champ.get_card_surface(self.card_size[0], img_h)
                 surface.blit(card_img, (x, y))
                 
-                # Bordo Tier Curvo sulla porzione immagine
+                # Bordo Tier
                 tier_color = getattr(champ, 'tier_color', WHITE)
                 pygame.draw.rect(surface, tier_color, (x, y, self.card_size[0], img_h), width=2, border_radius=14)
                 
-                # 3. Badge Costo Curvo in alto a destra
-                cost_badge = pygame.Rect(x + self.card_size[0] - 38, y + 6, 32, 20)
+                # Badge Costo
+                cost_badge = pygame.Rect(x + self.card_size[0] - 44, y + 8, 36, 22)
                 pygame.draw.rect(surface, (12, 15, 22, 230), cost_badge, border_radius=6)
                 pygame.draw.rect(surface, GOLD, cost_badge, width=1, border_radius=6)
-                draw_text(f"{champ.cost}g", pygame.font.SysFont("Arial", 12, bold=True), GOLD, surface, cost_badge.centerx, cost_badge.centery)
+                draw_text(f"{champ.cost}g", SMALL_FONT, GOLD, surface, cost_badge.centerx, cost_badge.centery)
                 
-                # 4. Tratti Campione (Spazio dedicato sotto l'immagine)
-                traits_str = " • ".join(getattr(champ, "traits", []))
-                trait_font = pygame.font.SysFont("Arial", 11, bold=True)
-                draw_text(traits_str, trait_font, (215, 215, 165), surface, x + self.card_size[0]//2, y + img_h + 12)
+                # Tratti Campione (ASCII safe con '-')
+                traits_str = " - ".join(getattr(champ, "traits", []))
+                draw_text(traits_str, SMALL_FONT, (215, 215, 165), surface, x + self.card_size[0]//2, y + img_h + 14)
                 
-                # 5. Nome Campione
-                name_font = pygame.font.SysFont("Arial", 14, bold=True)
-                draw_text(champ.name, name_font, WHITE, surface, x + self.card_size[0]//2, y + img_h + 30)
+                # Nome Campione
+                draw_text(champ.name, TEXT_FONT, WHITE, surface, x + self.card_size[0]//2, y + img_h + 34)
                 
-                # 6. Bordo Totale Card
+                # Bordo Totale Card
                 pygame.draw.rect(surface, tier_color, card_rect, width=1, border_radius=14)
                 
-                # 7. Bottone Compra Integrato sul fondo della card
-                buy_button = pygame.Rect(x + 10, y + self.card_size[1] - 38, self.card_size[0] - 20, 30)
+                # Bottone Compra
+                buy_button = pygame.Rect(x + 12, y + self.card_size[1] - 42, self.card_size[0] - 24, 34)
                 self.buy_buttons.append(buy_button) 
                 
                 can_buy = self.game.player_gold >= champ.cost and any(s is None for s in self.game.bench)
@@ -623,11 +624,10 @@ class ShopManager:
                     btn_color = (45, 48, 58)
                     border_btn = (70, 75, 88)
                     
-                pygame.draw.rect(surface, btn_color, buy_button, border_radius=15)
-                pygame.draw.rect(surface, border_btn, buy_button, width=1, border_radius=15)
-                draw_text(f"Compra ({champ.cost}g)", pygame.font.SysFont("Arial", 13, bold=True), WHITE if can_buy else (150, 150, 160), surface, buy_button.centerx, buy_button.centery)
+                pygame.draw.rect(surface, btn_color, buy_button, border_radius=17)
+                pygame.draw.rect(surface, border_btn, buy_button, width=1, border_radius=17)
+                draw_text(f"Compra ({champ.cost}g)", BUTTON_FONT, WHITE if can_buy else (150, 150, 160), surface, buy_button.centerx, buy_button.centery)
             else:
-                # Slot Shop Vuoto
                 draw_glass_panel(surface, card_rect, border_radius=14, bg_color=(18, 22, 32, 160), border_color=(40, 48, 60, 140), border_width=1)
                 self.buy_buttons.append(pygame.Rect(0,0,0,0)) 
 
@@ -644,26 +644,26 @@ class ShopManager:
         active_board_champs = [c for c in self.game.board if c is not None]
         active_traits = calculate_team_traits(active_board_champs, bonus_traits=bonus_traits)
         
-        draw_hud_augments(surface, mouse_pos, player_augments, start_x=12, start_y=30 + self.scroll_y)
-        draw_traits_sidebar(surface, active_traits, start_x=12, start_y=75 + self.scroll_y)
+        draw_hud_augments(surface, mouse_pos, player_augments, start_x=24, start_y=30)
+        draw_traits_sidebar(surface, active_traits, start_x=24, start_y=75)
         
-        # --- DAMAGE METER (POST-BATTAGLIA) ---
+        # --- DAMAGE METER & LOBBY CLASSIFICA A DESTRA ---
         if hasattr(self.game, 'damage_meter') and getattr(self.game, 'last_battle_player_team', None):
-            meter_y = max(390, 75 + len(active_traits) * 44 + 36) + self.scroll_y
+            meter_y = max(420, 80 + len(active_traits) * 44 + 36)
             self.game.damage_meter.draw(
                 surface, mouse_pos, self.game.last_battle_player_team, 
                 elapsed_seconds=getattr(self.game, 'last_battle_duration', 5.0), 
-                start_x=12, start_y=meter_y
+                start_x=24, start_y=meter_y
             )
         
         if hasattr(self.game, 'lobby_manager'):
-            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=1230, start_y=75 + self.scroll_y)
+            self.game.lobby_manager.draw_leaderboard_sidebar(surface, mouse_pos, start_x=1630, start_y=75)
 
-        # --- 5. SCACCHIERA (CELLE CURVE TRASLUCIDE) ---
+        # --- 5. SCACCHIERA (7x2 CELLE TRASLUCIDE) ---
         active_count = sum(1 for c in self.game.board if c is not None)
-        title_tag = pygame.Rect(surface.get_width() // 2 - 120, HEIGHT - 425 + self.scroll_y - 12, 240, 26)
-        draw_glass_panel(surface, title_tag, border_radius=13, bg_color=(15, 20, 30, 210), border_color=(190, 160, 60, 160), border_width=1)
-        draw_text(f"Scacchiera ({active_count}/{self.game.player_level})", stat_font, GOLD, surface, title_tag.centerx, title_tag.centery)
+        title_tag = pygame.Rect(sw // 2 - 140, 350, 280, 28)
+        draw_glass_panel(surface, title_tag, border_radius=14, bg_color=(15, 20, 30, 220), border_color=(190, 160, 60, 170), border_width=1)
+        draw_text(f"Scacchiera ({active_count}/{self.game.player_level})", HEADER_FONT, GOLD, surface, title_tag.centerx, title_tag.centery)
         
         board_rects = self.get_board_rects() 
         for i in range(self.game.board_slots):
@@ -674,39 +674,39 @@ class ShopManager:
             slot_border = (80, 180, 240, 200) if is_hover_slot else (45, 55, 75, 140)
             
             cell_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(cell_surf, slot_bg, (0, 0, rect.width, rect.height), border_radius=12)
-            pygame.draw.rect(cell_surf, slot_border, (0, 0, rect.width, rect.height), width=1, border_radius=12)
+            pygame.draw.rect(cell_surf, slot_bg, (0, 0, rect.width, rect.height), border_radius=14)
+            pygame.draw.rect(cell_surf, slot_border, (0, 0, rect.width, rect.height), width=1, border_radius=14)
             surface.blit(cell_surf, (rect.x, rect.y))
             
             champ = self.game.board[i]
             if champ:
                 # Ombra al suolo
-                shadow_surf = pygame.Surface((56, 16), pygame.SRCALPHA)
-                pygame.draw.ellipse(shadow_surf, (5, 8, 14, 150), (0, 0, 56, 16))
-                surface.blit(shadow_surf, (rect.centerx - 28, rect.centery + 12))
+                shadow_surf = pygame.Surface((60, 18), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow_surf, (5, 8, 14, 150), (0, 0, 60, 18))
+                surface.blit(shadow_surf, (rect.centerx - 30, rect.centery + 14))
                 
                 # Sprite Personaggio 2D
-                sprite = champ.get_sprite_surface(width=72, height=72)
-                surface.blit(sprite, (rect.centerx - 36, rect.centery - 38))
+                sprite = champ.get_sprite_surface(width=78, height=78)
+                surface.blit(sprite, (rect.centerx - 39, rect.centery - 40))
                 
+                # Stelle Vettoriali (draw_star)
                 stars = getattr(champ, "level", 1)
                 if stars >= 2:
                     for s in range(min(stars, 3)):
-                        cx = rect.centerx - (stars - 1) * 7 + s * 14
-                        cy = rect.top + 8
-                        pygame.draw.circle(surface, GOLD, (cx, cy), 4)
-                        pygame.draw.circle(surface, (0, 0, 0), (cx, cy), 4, width=1)
+                        cx = rect.centerx - (stars - 1) * 8 + s * 16
+                        cy = rect.top + 10
+                        draw_star(surface, cx, cy, radius=5, color=GOLD)
                 
                 name_color = GOLD if stars > 1 else WHITE
                 draw_text(champ.name, TEXT_FONT, (0,0,0), surface, rect.centerx + 1, rect.bottom - 9)
                 draw_text(champ.name, TEXT_FONT, name_color, surface, rect.centerx, rect.bottom - 10)
                 
-                self.draw_champ_items(surface, champ, rect.centerx, rect.centery + 14)
+                self.draw_champ_items(surface, champ, rect.centerx, rect.centery + 16)
 
-        # --- 6. PANCHINA (CELLE CURVE) ---
-        bench_tag = pygame.Rect(surface.get_width() // 2 - 75, HEIGHT - 180 + self.scroll_y - 12, 150, 26)
-        draw_glass_panel(surface, bench_tag, border_radius=13, bg_color=(15, 20, 30, 210), border_color=(190, 160, 60, 160), border_width=1)
-        draw_text("Panchina", stat_font, GOLD, surface, bench_tag.centerx, bench_tag.centery)
+        # --- 6. PANCHINA (9 CELLE) ---
+        bench_tag = pygame.Rect(sw // 2 - 100, 620, 200, 28)
+        draw_glass_panel(surface, bench_tag, border_radius=14, bg_color=(15, 20, 30, 220), border_color=(190, 160, 60, 170), border_width=1)
+        draw_text("Panchina", HEADER_FONT, GOLD, surface, bench_tag.centerx, bench_tag.centery)
         
         bench_rects = self.get_bench_rects()
         for i in range(self.game.bench_slots):
@@ -717,132 +717,119 @@ class ShopManager:
             slot_border = (80, 180, 240, 200) if is_hover_slot else (45, 55, 75, 140)
             
             cell_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(cell_surf, slot_bg, (0, 0, rect.width, rect.height), border_radius=12)
-            pygame.draw.rect(cell_surf, slot_border, (0, 0, rect.width, rect.height), width=1, border_radius=12)
+            pygame.draw.rect(cell_surf, slot_bg, (0, 0, rect.width, rect.height), border_radius=14)
+            pygame.draw.rect(cell_surf, slot_border, (0, 0, rect.width, rect.height), width=1, border_radius=14)
             surface.blit(cell_surf, (rect.x, rect.y))
             
             champ = self.game.bench[i]
             if champ:
-                # Ombra al suolo
-                shadow_surf = pygame.Surface((56, 16), pygame.SRCALPHA)
-                pygame.draw.ellipse(shadow_surf, (5, 8, 14, 150), (0, 0, 56, 16))
-                surface.blit(shadow_surf, (rect.centerx - 28, rect.centery + 12))
+                shadow_surf = pygame.Surface((60, 18), pygame.SRCALPHA)
+                pygame.draw.ellipse(shadow_surf, (5, 8, 14, 150), (0, 0, 60, 18))
+                surface.blit(shadow_surf, (rect.centerx - 30, rect.centery + 14))
                 
-                # Sprite Personaggio 2D
-                sprite = champ.get_sprite_surface(width=72, height=72)
-                surface.blit(sprite, (rect.centerx - 36, rect.centery - 38))
+                sprite = champ.get_sprite_surface(width=78, height=78)
+                surface.blit(sprite, (rect.centerx - 39, rect.centery - 40))
                 
                 stars = getattr(champ, "level", 1)
                 if stars >= 2:
                     for s in range(min(stars, 3)):
-                        cx = rect.centerx - (stars - 1) * 7 + s * 14
-                        cy = rect.top + 8
-                        pygame.draw.circle(surface, GOLD, (cx, cy), 4)
-                        pygame.draw.circle(surface, (0, 0, 0), (cx, cy), 4, width=1)
+                        cx = rect.centerx - (stars - 1) * 8 + s * 16
+                        cy = rect.top + 10
+                        draw_star(surface, cx, cy, radius=5, color=GOLD)
                 
                 name_color = GOLD if stars > 1 else WHITE
                 draw_text(champ.name, TEXT_FONT, (0,0,0), surface, rect.centerx + 1, rect.bottom - 9)
                 draw_text(champ.name, TEXT_FONT, name_color, surface, rect.centerx, rect.bottom - 10)
                 
-                self.draw_champ_items(surface, champ, rect.centerx, rect.centery + 14)
+                self.draw_champ_items(surface, champ, rect.centerx, rect.centery + 16)
 
         # --- 7. UI BASSA (BOTTONI O CESTINO DI VENDITA DURANTE IL DRAG) ---
         if self.is_dragging and self.dragged_champ:
-            # Mostra Cestino di Vendita Dinamico stile TFT
             level = getattr(self.dragged_champ, 'level', 1)
             cost = getattr(self.dragged_champ, 'cost', 1)
             total_invested = cost * (3 ** (level - 1))
             sell_price = total_invested if level == 1 else max(1, total_invested - 1)
             
             is_sell_hover = self.sell_zone_rect.collidepoint(mouse_pos)
-            bg_sell = (120, 25, 35, 240) if is_sell_hover else (60, 18, 25, 230)
+            bg_sell = (130, 25, 35, 245) if is_sell_hover else (70, 20, 28, 230)
             border_sell = (255, 90, 100) if is_sell_hover else (220, 70, 80)
             
-            draw_glass_panel(surface, self.sell_zone_rect, border_radius=24, bg_color=bg_sell, border_color=border_sell, border_width=2 if is_sell_hover else 1)
+            draw_glass_panel(surface, self.sell_zone_rect, border_radius=28, bg_color=bg_sell, border_color=border_sell, border_width=2 if is_sell_hover else 1)
             
-            sell_font = pygame.font.SysFont("Arial", 16, bold=True)
-            sell_txt = f"🗑️ RILASCIA QUI PER VENDERE (+{sell_price} ORO)"
-            draw_text(sell_txt, sell_font, (255, 235, 140) if is_sell_hover else (255, 200, 205), surface, self.sell_zone_rect.centerx, self.sell_zone_rect.centery)
+            sell_txt = f"[VENDI] RILASCIA QUI PER VENDERE (+{sell_price} ORO)"
+            draw_text(sell_txt, BUTTON_FONT, (255, 235, 140) if is_sell_hover else (255, 200, 205), surface, self.sell_zone_rect.centerx, self.sell_zone_rect.centery)
         else:
             # Bottone Compra XP
             can_xp = self.game.player_gold >= 4 and self.game.player_level < 9
             xp_hover = self.buy_xp_button_rect.collidepoint(mouse_pos)
             x_color = (35, 140, 240) if xp_hover and can_xp else ((25, 105, 195) if can_xp else (50, 52, 60))
-            pygame.draw.rect(surface, x_color, self.buy_xp_button_rect, border_radius=24)
-            pygame.draw.rect(surface, (100, 200, 255) if can_xp else (70, 75, 85), self.buy_xp_button_rect, width=2, border_radius=24)
+            pygame.draw.rect(surface, x_color, self.buy_xp_button_rect, border_radius=26)
+            pygame.draw.rect(surface, (100, 200, 255) if can_xp else (70, 75, 85), self.buy_xp_button_rect, width=2, border_radius=26)
             draw_text("COMPRA XP (4g)", BUTTON_FONT, WHITE if can_xp else (150, 150, 150), surface, self.buy_xp_button_rect.centerx, self.buy_xp_button_rect.centery)
 
             # Bottone Reroll
             reroll_hover = self.refresh_button_rect.collidepoint(mouse_pos)
             can_reroll = self.game.player_gold >= 2
             r_color = (210, 140, 20) if reroll_hover and can_reroll else ((170, 110, 15) if can_reroll else (50, 52, 60))
-            pygame.draw.rect(surface, r_color, self.refresh_button_rect, border_radius=24)
-            pygame.draw.rect(surface, (255, 210, 80) if can_reroll else (70, 75, 85), self.refresh_button_rect, width=2, border_radius=24)
+            pygame.draw.rect(surface, r_color, self.refresh_button_rect, border_radius=26)
+            pygame.draw.rect(surface, (255, 210, 80) if can_reroll else (70, 75, 85), self.refresh_button_rect, width=2, border_radius=26)
             draw_text("REROLL (2g)", BUTTON_FONT, WHITE if can_reroll else (150, 150, 150), surface, self.refresh_button_rect.centerx, self.refresh_button_rect.centery)
 
             # Bottone Inizia Battaglia
             can_confirm = active_count > 0 
             btn_hover = self.confirm_button_rect.collidepoint(mouse_pos)
             c_color = (35, 185, 85) if btn_hover and can_confirm else ((25, 145, 65) if can_confirm else (50, 52, 60))
-            pygame.draw.rect(surface, c_color, self.confirm_button_rect, border_radius=24)
-            pygame.draw.rect(surface, (120, 255, 160) if can_confirm else (70, 75, 85), self.confirm_button_rect, width=2, border_radius=24)
+            pygame.draw.rect(surface, c_color, self.confirm_button_rect, border_radius=26)
+            pygame.draw.rect(surface, (120, 255, 160) if can_confirm else (70, 75, 85), self.confirm_button_rect, width=2, border_radius=26)
             draw_text("COMBATTI", BUTTON_FONT, WHITE if can_confirm else (150, 150, 150), surface, self.confirm_button_rect.centerx, self.confirm_button_rect.centery)
 
-        # --- 8. BANCO INVENTARIO OGGETTI (CURVO GLASSMORPHISM) ---
-        item_box_rect = pygame.Rect(12, HEIGHT - 118 + self.scroll_y, 200, 100)
-        draw_glass_panel(surface, item_box_rect, border_radius=16, bg_color=(14, 18, 28, 220), border_color=(190, 160, 60, 160), border_width=1)
-        
-        item_title_font = pygame.font.SysFont("Arial", 11, bold=True)
-        draw_text("BANCO OGGETTI", item_title_font, GOLD, surface, item_box_rect.centerx, item_box_rect.top + 12)
+        # --- 8. BANCO INVENTARIO OGGETTI (1920x1080) ---
+        item_box_rect = pygame.Rect(18, 830, 250, 145)
+        draw_glass_panel(surface, item_box_rect, border_radius=18, bg_color=(14, 18, 28, 230), border_color=(190, 160, 60, 170), border_width=1)
+        draw_text("BANCO OGGETTI", HEADER_FONT, GOLD, surface, item_box_rect.centerx, item_box_rect.top + 16)
         
         item_rects = self.get_item_bench_rects()
-        
         hovered_item_desc = None
         for i, rect in enumerate(item_rects):
             is_slot_hover = rect.collidepoint(mouse_pos)
-            pygame.draw.rect(surface, (20, 26, 38), rect, border_radius=8)
-            pygame.draw.rect(surface, (80, 100, 130) if is_slot_hover else (45, 55, 75), rect, width=1, border_radius=8)
+            pygame.draw.rect(surface, (20, 26, 38), rect, border_radius=10)
+            pygame.draw.rect(surface, (80, 100, 130) if is_slot_hover else (45, 55, 75), rect, width=1, border_radius=10)
             
             if i < len(self.game.player_items):
                 item_key = self.game.player_items[i]
                 data = get_item_data(item_key)
-                
-                # Disegna icona grafica reale
                 draw_item_icon(surface, item_key, rect, is_hover=is_slot_hover)
-                
                 if is_slot_hover and not self.is_dragging_item:
                     hovered_item_desc = f"{data.get('name','')}: {data.get('desc','')}"
 
         if hovered_item_desc:
-            tip_font = pygame.font.SysFont("Arial", 13, bold=True)
-            tip_surf = tip_font.render(hovered_item_desc, True, (245, 245, 255))
-            tip_box = pygame.Rect(mouse_pos[0] + 15, mouse_pos[1] - 30, tip_surf.get_width() + 16, 26)
-            pygame.draw.rect(surface, (12, 16, 25, 235), tip_box, border_radius=8)
+            tip_surf = TEXT_FONT.render(hovered_item_desc, True, (245, 245, 255))
+            tip_box = pygame.Rect(mouse_pos[0] + 15, mouse_pos[1] - 32, tip_surf.get_width() + 18, 30)
+            pygame.draw.rect(surface, (12, 16, 25, 240), tip_box, border_radius=8)
             pygame.draw.rect(surface, GOLD, tip_box, width=1, border_radius=8)
-            surface.blit(tip_surf, (tip_box.x + 8, tip_box.y + 6))
+            surface.blit(tip_surf, (tip_box.x + 9, tip_box.y + 6))
 
-        # --- DRAG & DROP OGGETTI FEEDBACK (ICONA GRAFICA) ---
+        # --- DRAG & DROP OGGETTI FEEDBACK ---
         if self.is_dragging_item and self.dragged_item_key:
-            drag_icon = get_item_icon_surface(self.dragged_item_key, size=44, is_hover=True)
-            surface.blit(drag_icon, (mouse_pos[0] - 22, mouse_pos[1] - 22))
+            drag_icon = get_item_icon_surface(self.dragged_item_key, size=48, is_hover=True)
+            surface.blit(drag_icon, (mouse_pos[0] - 24, mouse_pos[1] - 24))
 
         # --- DRAG & DROP CAMPIONI FEEDBACK ---
         if self.is_dragging and self.dragged_champ:
-            drag_token = self.dragged_champ.get_token_surface(size=64)
-            surface.blit(drag_token, (mouse_pos[0] - 32, mouse_pos[1] - 32))
+            drag_token = self.dragged_champ.get_token_surface(size=72)
+            surface.blit(drag_token, (mouse_pos[0] - 36, mouse_pos[1] - 36))
             tier_color = getattr(self.dragged_champ, 'tier_color', WHITE)
-            pygame.draw.circle(surface, tier_color, mouse_pos, 34, width=3)
-            pygame.draw.circle(surface, (255, 255, 255), mouse_pos, 36, width=1)
+            pygame.draw.circle(surface, tier_color, mouse_pos, 38, width=3)
+            pygame.draw.circle(surface, (255, 255, 255), mouse_pos, 40, width=1)
 
-        # --- 9. MODAL ISPETTORE CAMPIONE SU CLICK ---
+        # --- 9. MODAL ISPETTORE CAMPIONE SU CLICK DX ---
         if self.inspected_champion:
             self.draw_champion_inspector(surface, self.inspected_champion)
 
     def draw_champion_inspector(self, surface, champ):
         """
-        Disegna la Scheda Dettaglio / Ispettore Campione su Click (Glassmorphism TFT).
-        Mostra: Portrait grande, Tier/Costo, Stelle, Tratti/Sinergie con spiegazione estesa,
-        statistiche di combattimento complete, abilità speciale e oggetti.
+        Disegna la Scheda Dettaglio / Ispettore Campione su Click DX (1920x1080).
+        Utilizza rendering vettoriale per stelle e croce X senza problemi di font.
         """
         if not champ:
             return
@@ -853,62 +840,58 @@ class ShopManager:
 
         # 1. Dark Backdrop Overlay
         backdrop = pygame.Surface((sw, sh), pygame.SRCALPHA)
-        backdrop.fill((0, 0, 0, 165))
+        backdrop.fill((0, 0, 0, 175))
         surface.blit(backdrop, (0, 0))
 
         # 2. Main Modal Rect
-        modal_w = 540
-        modal_h = 660
+        modal_w = 640
+        modal_h = 760
         modal_x = (sw - modal_w) // 2
         modal_y = (sh - modal_h) // 2
         self.inspector_rect = pygame.Rect(modal_x, modal_y, modal_w, modal_h)
 
         # Glassmorphism Card Background
         tier_col = getattr(champ, 'tier_color', (180, 160, 60))
-        draw_glass_panel(surface, self.inspector_rect, border_radius=22, bg_color=(15, 20, 32, 250), border_color=(*tier_col[:3], 220), border_width=2)
+        draw_glass_panel(surface, self.inspector_rect, border_radius=24, bg_color=(15, 20, 32, 250), border_color=(*tier_col[:3], 230), border_width=2)
 
-        # Pulsante Chiusura "✕"
-        self.inspector_close_rect = pygame.Rect(modal_x + modal_w - 44, modal_y + 16, 30, 30)
+        # Pulsante Chiusura con Croce Vettoriale (draw_cross)
+        self.inspector_close_rect = pygame.Rect(modal_x + modal_w - 46, modal_y + 16, 32, 32)
         close_hover = self.inspector_close_rect.collidepoint(mouse_pos)
-        pygame.draw.circle(surface, (200, 45, 55) if close_hover else (35, 45, 65), self.inspector_close_rect.center, 15)
-        pygame.draw.circle(surface, (255, 100, 110) if close_hover else (80, 95, 120), self.inspector_close_rect.center, 15, width=1)
-        close_font = pygame.font.SysFont("Arial", 16, bold=True)
-        draw_text("✕", close_font, (255, 255, 255), surface, self.inspector_close_rect.centerx, self.inspector_close_rect.centery)
-
-        # Fonts
-        title_font = pygame.font.SysFont("Arial", 24, bold=True)
-        h2_font = pygame.font.SysFont("Arial", 14, bold=True)
-        body_font = pygame.font.SysFont("Arial", 12, bold=False)
-        sub_font = pygame.font.SysFont("Arial", 11, bold=True)
+        pygame.draw.circle(surface, (200, 45, 55) if close_hover else (35, 45, 65), self.inspector_close_rect.center, 16)
+        pygame.draw.circle(surface, (255, 100, 110) if close_hover else (80, 95, 120), self.inspector_close_rect.center, 16, width=1)
+        draw_cross(surface, self.inspector_close_rect.centerx, self.inspector_close_rect.centery, radius=7, color=WHITE, width=2)
 
         # 3. HEADER & RITRATTO
-        portrait_rect = pygame.Rect(modal_x + 24, modal_y + 24, 96, 96)
-        draw_glass_panel(surface, portrait_rect, border_radius=14, bg_color=(10, 14, 22, 240), border_color=tier_col, border_width=2)
+        portrait_rect = pygame.Rect(modal_x + 28, modal_y + 24, 110, 110)
+        draw_glass_panel(surface, portrait_rect, border_radius=16, bg_color=(10, 14, 22, 240), border_color=tier_col, border_width=2)
         
-        p_surf = create_card_image(champ.name, width=90, height=90)
+        p_surf = create_card_image(champ.name, width=104, height=104)
         surface.blit(p_surf, (portrait_rect.x + 3, portrait_rect.y + 3))
 
         # Nome del Campione
-        champ_name_x = modal_x + 135
-        draw_text(champ.name, title_font, (255, 255, 255), surface, champ_name_x + 10, modal_y + 36)
+        champ_name_x = modal_x + 155
+        draw_text(champ.name, SUBTITLE_FONT, WHITE, surface, champ_name_x, modal_y + 30, center=False)
 
-        # Stelle ★
+        # Rango Stelle Vettoriali
         stars = getattr(champ, "level", 1)
-        star_str = "★" * stars
-        draw_text(f"Rango: {star_str}", h2_font, GOLD, surface, champ_name_x + 40, modal_y + 64)
+        draw_text("Rango: ", HEADER_FONT, GOLD, surface, champ_name_x, modal_y + 68, center=False)
+        for s in range(min(stars, 3)):
+            star_x = champ_name_x + 75 + s * 22
+            star_y = modal_y + 78
+            draw_star(surface, star_x, star_y, radius=8, color=GOLD)
 
         # Badge Costo Tier
         cost = getattr(champ, "cost", 1)
-        cost_badge = pygame.Rect(champ_name_x + 130, modal_y + 54, 110, 22)
-        pygame.draw.rect(surface, (*tier_col[:3], 60), cost_badge, border_radius=11)
-        pygame.draw.rect(surface, tier_col, cost_badge, width=1, border_radius=11)
-        draw_text(f"TIER {cost} • {cost} ORO", sub_font, tier_col, surface, cost_badge.centerx, cost_badge.centery)
+        cost_badge = pygame.Rect(champ_name_x + 160, modal_y + 66, 125, 26)
+        pygame.draw.rect(surface, (*tier_col[:3], 60), cost_badge, border_radius=13)
+        pygame.draw.rect(surface, tier_col, cost_badge, width=1, border_radius=13)
+        draw_text(f"TIER {cost} | {cost} ORO", SMALL_FONT, tier_col, surface, cost_badge.centerx, cost_badge.centery)
 
-        # 4. SEZIONE TRATTI & SINERGIE (CON DESCRIZIONI COMPLETE)
-        traits_y = modal_y + 135
-        draw_text("TRATTI & SINERGIE", h2_font, (240, 205, 70), surface, modal_x + 85, traits_y)
+        # 4. SEZIONE TRATTI & SINERGIE
+        traits_y = modal_y + 150
+        draw_text("TRATTI & SINERGIE", HEADER_FONT, (240, 205, 70), surface, modal_x + 28, traits_y, center=False)
 
-        curr_ty = traits_y + 16
+        curr_ty = traits_y + 28
         for tname in getattr(champ, "traits", []):
             tdata = TRAITS_DATA.get(tname, {
                 "color": (160, 160, 160),
@@ -920,78 +903,74 @@ class ShopManager:
             ttype = tdata.get("type", "ORIGIN")
             
             # Badge Tratto
-            tbadge_rect = pygame.Rect(modal_x + 24, curr_ty, modal_w - 48, 48)
-            draw_glass_panel(surface, tbadge_rect, border_radius=10, bg_color=(20, 26, 40, 230), border_color=tcolor, border_width=1)
+            tbadge_rect = pygame.Rect(modal_x + 28, curr_ty, modal_w - 56, 52)
+            draw_glass_panel(surface, tbadge_rect, border_radius=12, bg_color=(20, 26, 40, 230), border_color=tcolor, border_width=1)
             
             # Icona circolare
-            pygame.draw.circle(surface, tcolor, (modal_x + 44, curr_ty + 24), 12)
-            pygame.draw.circle(surface, (255, 255, 255), (modal_x + 44, curr_ty + 24), 5)
+            pygame.draw.circle(surface, tcolor, (modal_x + 52, curr_ty + 26), 14)
+            pygame.draw.circle(surface, (255, 255, 255), (modal_x + 52, curr_ty + 26), 6)
             
-            # Titolo Tratto + Tipo
+            # Titolo Tratto
             ttxt = f"{tname} ({ttype})"
-            name_surf = h2_font.render(ttxt, True, tcolor)
-            surface.blit(name_surf, (modal_x + 65, curr_ty + 5))
+            draw_text(ttxt, HEADER_FONT, tcolor, surface, modal_x + 78, curr_ty + 8, center=False)
             
             # Breakpoints & Descrizione
             bp_str = "/".join(str(b) for b in tdata.get("breakpoints", []))
             desc_txt = f"Soglie ({bp_str}): {tdata.get('description', '')}"
-            desc_surf = sub_font.render(desc_txt[:62], True, (210, 220, 235))
-            surface.blit(desc_surf, (modal_x + 65, curr_ty + 26))
+            draw_text(desc_txt[:70], SMALL_FONT, (210, 220, 235), surface, modal_x + 78, curr_ty + 30, center=False)
             
-            curr_ty += 54
+            curr_ty += 60
 
         # 5. STATISTICHE DI COMBATTIMENTO
-        stats_y = curr_ty + 10
-        draw_text("STATISTICHE BASE", h2_font, (240, 205, 70), surface, modal_x + 85, stats_y)
+        stats_y = curr_ty + 8
+        draw_text("STATISTICHE BASE", HEADER_FONT, (240, 205, 70), surface, modal_x + 28, stats_y, center=False)
         
         # Grid box statistiche
-        stats_box = pygame.Rect(modal_x + 24, stats_y + 16, modal_w - 48, 110)
-        draw_glass_panel(surface, stats_box, border_radius=12, bg_color=(16, 22, 34, 220), border_color=(60, 75, 100), border_width=1)
+        stats_box = pygame.Rect(modal_x + 28, stats_y + 26, modal_w - 56, 120)
+        draw_glass_panel(surface, stats_box, border_radius=14, bg_color=(16, 22, 34, 220), border_color=(60, 75, 100), border_width=1)
         
         # 1a colonna
-        c1_x = stats_box.x + 14
-        draw_text(f"Salute (HP): {champ.hp} / {champ.max_hp}", sub_font, (120, 255, 160), surface, c1_x + 60, stats_box.y + 18)
-        draw_text(f"Mana: {champ.mana_start} / {champ.mana_max}", sub_font, (100, 200, 255), surface, c1_x + 48, stats_box.y + 42)
-        draw_text(f"Attacco (AD): {champ.base_attack}", sub_font, (255, 215, 80), surface, c1_x + 55, stats_box.y + 66)
-        draw_text(f"Difesa (Armor): {getattr(champ, 'base_defense', 0)}", sub_font, (190, 205, 230), surface, c1_x + 58, stats_box.y + 90)
+        c1_x = stats_box.x + 18
+        draw_text(f"Salute (HP): {champ.hp} / {champ.max_hp}", TEXT_FONT, (120, 255, 160), surface, c1_x, stats_box.y + 12, center=False)
+        draw_text(f"Mana: {champ.mana_start} / {champ.mana_max}", TEXT_FONT, (100, 200, 255), surface, c1_x, stats_box.y + 38, center=False)
+        draw_text(f"Attacco (AD): {champ.base_attack}", TEXT_FONT, (255, 215, 80), surface, c1_x, stats_box.y + 64, center=False)
+        draw_text(f"Difesa (Armor): {getattr(champ, 'base_defense', 0)}", TEXT_FONT, (190, 205, 230), surface, c1_x, stats_box.y + 90, center=False)
         
         # 2a colonna
-        c2_x = stats_box.centerx + 14
-        draw_text(f"Vel. Attacco: {champ.attack_speed:.2f}/s", sub_font, (240, 180, 70), surface, c2_x + 55, stats_box.y + 18)
+        c2_x = stats_box.centerx + 10
+        draw_text(f"Vel. Attacco: {champ.attack_speed:.2f}/s", TEXT_FONT, (240, 180, 70), surface, c2_x, stats_box.y + 12, center=False)
         range_str = "Mischia (80px)" if champ.attack_range < 100 else ("Cecchino (500px)" if champ.attack_range > 350 else "Distanza (300px)")
-        draw_text(f"Raggio: {range_str}", sub_font, (220, 225, 240), surface, c2_x + 65, stats_box.y + 42)
+        draw_text(f"Raggio: {range_str}", TEXT_FONT, (220, 225, 240), surface, c2_x, stats_box.y + 38, center=False)
         crit_pct = int(champ.crit_chance * 100)
-        draw_text(f"Critico: {crit_pct}% ({champ.crit_multiplier:.1f}x)", sub_font, (255, 120, 140), surface, c2_x + 58, stats_box.y + 66)
+        draw_text(f"Critico: {crit_pct}% ({champ.crit_multiplier:.1f}x)", TEXT_FONT, (255, 120, 140), surface, c2_x, stats_box.y + 64, center=False)
         sp_pct = int(getattr(champ, 'spell_power_mult', 1.0) * 100)
-        draw_text(f"Potere Magico (AP): {sp_pct}%", sub_font, (210, 130, 255), surface, c2_x + 68, stats_box.y + 90)
+        draw_text(f"Potere Magico (AP): {sp_pct}%", TEXT_FONT, (210, 130, 255), surface, c2_x, stats_box.y + 90, center=False)
 
         # 6. ABILITÀ SPECIALE
         ability_y = stats_box.bottom + 12
         ab_info = champ.get_ability_info() if hasattr(champ, 'get_ability_info') else {"name": "Abilità", "type": "Speciale", "cost": "100 Mana", "desc": "Mossa speciale"}
         
-        ab_box = pygame.Rect(modal_x + 24, ability_y, modal_w - 48, 80)
-        draw_glass_panel(surface, ab_box, border_radius=12, bg_color=(22, 28, 44, 230), border_color=(120, 90, 210), border_width=1)
+        ab_box = pygame.Rect(modal_x + 28, ability_y, modal_w - 56, 88)
+        draw_glass_panel(surface, ab_box, border_radius=14, bg_color=(22, 28, 44, 230), border_color=(120, 90, 210), border_width=1)
         
-        ab_title = f"✨ {ab_info['name']}  ({ab_info.get('type', 'Speciale')})  -  {ab_info.get('cost', '')}"
-        ab_surf = h2_font.render(ab_title, True, (255, 235, 120))
-        surface.blit(ab_surf, (ab_box.x + 12, ab_box.y + 8))
+        ab_title = f"[SPELL] {ab_info['name']}  ({ab_info.get('type', 'Speciale')})  -  {ab_info.get('cost', '')}"
+        draw_text(ab_title, HEADER_FONT, (255, 235, 120), surface, ab_box.x + 14, ab_box.y + 10, center=False)
         
         desc = ab_info.get("desc", "")
-        line1 = desc[:66]
-        line2 = desc[66:132] if len(desc) > 66 else ""
-        surface.blit(body_font.render(line1, True, (215, 225, 240)), (ab_box.x + 12, ab_box.y + 32))
+        line1 = desc[:72]
+        line2 = desc[72:144] if len(desc) > 72 else ""
+        draw_text(line1, SMALL_FONT, (215, 225, 240), surface, ab_box.x + 14, ab_box.y + 36, center=False)
         if line2:
-            surface.blit(body_font.render(line2, True, (215, 225, 240)), (ab_box.x + 12, ab_box.y + 50))
+            draw_text(line2, SMALL_FONT, (215, 225, 240), surface, ab_box.x + 14, ab_box.y + 56, center=False)
 
         # 7. OGGETTI EQUIPAGGIATI (0/3)
-        item_y = ab_box.bottom + 10
-        draw_text("OGGETTI EQUIPAGGIATI (Max 3):", sub_font, (180, 195, 215), surface, modal_x + 115, item_y + 12)
+        item_y = ab_box.bottom + 12
+        draw_text("OGGETTI EQUIPAGGIATI (Max 3):", TEXT_FONT, (180, 195, 215), surface, modal_x + 28, item_y + 12, center=False)
         
         champ_items = getattr(champ, "items", [])
         for idx in range(3):
-            slot_rect = pygame.Rect(modal_x + 240 + idx * 48, item_y - 2, 38, 38)
+            slot_rect = pygame.Rect(modal_x + 280 + idx * 54, item_y - 2, 44, 44)
             if idx < len(champ_items):
                 draw_item_icon(surface, champ_items[idx], slot_rect)
             else:
-                draw_glass_panel(surface, slot_rect, border_radius=8, bg_color=(12, 16, 24, 180), border_color=(45, 55, 75), border_width=1)
-                draw_text("•", sub_font, (80, 90, 110), surface, slot_rect.centerx, slot_rect.centery)
+                draw_glass_panel(surface, slot_rect, border_radius=10, bg_color=(12, 16, 24, 180), border_color=(45, 55, 75), border_width=1)
